@@ -176,6 +176,12 @@ An agent's reply is full of things nobody wants read aloud. Before synthesis:
 Substitutions replace rather than delete, so sentences stay grammatical. "Open a
 link and check it" is something you can say out loud. A gap is not.
 
+**Code is deliberately never read aloud.** A bash one-liner spelled out character
+by character is unlistenable, and the code is already on your screen — the prose
+around it is where the meaning is. One consequence worth expecting: a reply that
+is almost entirely code will speak only the sentence or two wrapping it. That is
+working correctly, not failing.
+
 ---
 
 ## Choosing a voice
@@ -245,6 +251,10 @@ the model; there is no reason to add a second for turning text into sound.
 That needs a mouse click each time, uses a voice you cannot change, and depends
 on their service. This speaks automatically, in a voice you choose or blend
 yourself, entirely locally.
+
+**Why did it only say one sentence?**
+Code is never read aloud — a code-heavy reply speaks only the prose around it.
+That is by design; the code is on your screen.
 
 **Can I stop it while it is talking?**
 Say or type `shush`. It stops in well under a second, without waiting for the
