@@ -1,6 +1,7 @@
 #!/bin/bash
 # Talkback installer. Idempotent — safe to re-run to upgrade.
 set -e
+trap 'echo "  INSTALL FAILED at line $LINENO. Nothing further was changed." >&2; exit 1' ERR
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ENGINE="$HOME/.claude/automation/kokoro"
 HOOKS="$HOME/.claude/automation/notifications"
@@ -15,7 +16,7 @@ command -v jq >/dev/null || { echo "Missing jq. Run: brew install jq"; exit 1; }
 command -v uv >/dev/null || { echo "Missing uv. See https://docs.astral.sh/uv/"; exit 1; }
 
 say "engine -> $ENGINE"
-mkdir -p "$ENGINE" "$HOOKS" "$HOME/bin" \
+mkdir -p "$ENGINE" "$HOOKS" "$HOME/bin" "$HOME/Library/LaunchAgents" \
          "$HOME/.claude/automation/recording" "$HOME/.claude/automation/lastreply"
 cp "$HERE/engine/server.py" "$HERE/engine/icg_voice.pt" "$ENGINE/"
 
@@ -30,11 +31,11 @@ uv pip install --python "$ENGINE/.venv/bin/python" -r "$HERE/engine/requirements
     "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl"
 
 say "hooks -> $HOOKS"
-cp "$HERE"/hooks/* "$HOOKS/"
+find "$HERE/hooks" -maxdepth 1 -type f -exec cp {} "$HOOKS/" \;
 chmod +x "$HOOKS"/*.sh
 
 say "commands -> ~/bin"
-cp "$HERE"/bin/* "$HOME/bin/"
+find "$HERE/bin" -maxdepth 1 -type f -exec cp {} "$HOME/bin/" \;
 chmod +x "$HOME/bin/shush" "$HOME/bin/replay" "$HOME/bin/recmode" "$HOME/bin/kokoro-server"
 
 say "launch agent -> $PLIST"
@@ -59,6 +60,18 @@ ensure("Stop", f"{hooks_dir}/speak_last_reply.sh")
 ensure("UserPromptSubmit", f"{hooks_dir}/tts_toggle.sh")
 json.dump(d, open(p, "w"), indent=2)
 PY
+
+# verify rather than assume
+MISSING=""
+for f in "$ENGINE/server.py" "$ENGINE/icg_voice.pt" "$HOOKS/speak_last_reply.sh" \
+         "$HOOKS/play_reply.sh" "$HOME/bin/shush" "$HOME/bin/replay" \
+         "$HOME/bin/recmode" "$HOME/bin/kokoro-server" "$PLIST"; do
+  [ -e "$f" ] || MISSING="$MISSING\n    $f"
+done
+if [ -n "$MISSING" ]; then
+  printf "  INSTALL INCOMPLETE — missing:%b\n" "$MISSING" >&2
+  exit 1
+fi
 
 say ""
 say "Installed. Wait ~10s for the model to load, then in any Claude Code session:"

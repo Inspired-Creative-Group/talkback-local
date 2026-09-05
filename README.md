@@ -58,8 +58,8 @@ tool as typed. `shush` said out loud stops the voice in under a second.
 | | |
 |---|---|
 | **OS** | macOS. Playback and the startup item are Apple-specific. |
-| **Chip** | Apple Silicon — M1 or newer. Intel Macs are untested; the model will fall back to CPU. |
-| **Memory** | **16 GB recommended.** The server holds the model resident at roughly 4 GB. It will run on 8 GB, but alongside a browser and an editor it will lean on swap. |
+| **Chip** | **Apple Silicon required** — M1 or newer. Intel Macs have no Metal backend, so synthesis falls to a slow CPU path; on a 2020 dual-core i3 it would run below realtime, which is worse than useless for speech. |
+| **Memory** | **16 GB recommended.** The server holds the model resident at roughly 4 GB. 8 GB works in principle but leaves little room beside a browser and an editor. |
 | **Disk** | About 1.2 GB — 900 MB Python environment, 320 MB model. |
 | **Tools** | `ffmpeg`, `espeak-ng`, `jq`, and [uv](https://docs.astral.sh/uv/). |
 
@@ -82,6 +82,10 @@ cd talkback-local && ./install.sh
 ```
 
 Then type `TTS on` in any Claude Code session.
+
+The installer stops with a clear error rather than half-finishing, and verifies
+every file landed before it reports success. It has been tested from scratch
+against a clean home directory, including the re-run upgrade path.
 
 ### First run is slow — this is normal
 
