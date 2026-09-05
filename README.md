@@ -275,10 +275,21 @@ useful things to send. Issues and pull requests are open.
 
 ---
 
+## Credit
+
+The voice is [**Kokoro-82M**](https://huggingface.co/hexgrad/Kokoro-82M) by
+[hexgrad](https://github.com/hexgrad) — 82 million parameters, Apache-2.0, and
+good enough that a local voice stopped being a compromise. Talkback Local is a
+thin layer of plumbing around it; the hard part is theirs.
+
 ## Licence
 
 MIT — see [LICENSE](LICENSE) and [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
-Kokoro-82M is Apache-2.0.
+
+Kokoro-82M is Apache-2.0. Talkback Local does not redistribute it — the model is
+downloaded from Hugging Face at install time. The bundled voice blend in
+`engine/icg_voice.pt` is derived from Kokoro's weights and carries Kokoro's
+Apache-2.0 terms.
 
 ---
 
