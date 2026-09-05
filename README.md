@@ -1,6 +1,6 @@
-# Talkback
+# Talkback Local
 
-**Your coding agent, out loud.**
+**Local voice for Claude Code. Your coding agent, out loud.**
 
 Claude Code speaks its replies in a voice that runs entirely on your own machine.
 No API key, no quota, no per-word cost, no audio ever leaving the computer.
@@ -75,8 +75,8 @@ M1 or M2 will be slower than the figures above and still comfortable.
 brew install ffmpeg espeak-ng jq
 curl -LsSf https://astral.sh/uv/install.sh | sh     # if you don't have uv
 
-git clone https://github.com/Inspired-Creative-Group/icg-talkback
-cd icg-talkback && ./install.sh
+git clone https://github.com/Inspired-Creative-Group/talkback-local
+cd talkback-local && ./install.sh
 ```
 
 Then type `TTS on` in any Claude Code session.
