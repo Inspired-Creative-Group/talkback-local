@@ -290,6 +290,47 @@ something nobody else has. See [VOICE.md](VOICE.md).
 
 ---
 
+## Measured, and on what
+
+Every number here was taken on one machine: **M4 Max, 16 cores, 128 GB, macOS
+26.3**. Your mileage will differ, and the honest list of what has *not* been
+tested is below.
+
+| | |
+|---|---|
+| Installer, start to finish | **29s** |
+| Cold first start (312 MB model download + load) | **20s** after the installer |
+| Warm start, model already cached | **~4s**, once, at login |
+| Time to first word of a reply | **~1s**, regardless of reply length |
+| Synthesis, idle machine | **~13x realtime** |
+| Synthesis, machine genuinely busy | **~2-3x realtime** |
+| First synthesis after a cold start | 1.1s for 2.6s of audio |
+| Resident memory while running | ~4 GB |
+| Disk | 312 MB model + ~900 MB Python environment |
+
+Anything above realtime is enough — playback starts on the first sentence while
+the rest is still being generated.
+
+### What has been tested
+
+A full install from a clean home directory with an empty model cache, the re-run
+upgrade path, and the failure paths — an interrupted reply, a stopped server, an
+engine returning an error instead of audio.
+
+### What has not
+
+- **Any Mac other than an M4.** M1, M2 and M3 should be slower and comfortable;
+  nobody has measured them.
+- **Older macOS.** Built and run on macOS 26.
+- **A machine missing the prerequisites.** The installer checks for them and
+  stops with a message, but those paths have never actually failed for real.
+- **Intel Macs are not supported.** No Metal backend means a CPU-only path; on a
+  2020 dual-core i3 it would run below realtime, which is worse than useless for
+  speech.
+
+If it behaves differently on your hardware, that is worth an issue — those gaps
+are the ones that need other people's machines to close.
+
 ## Contributing
 
 Yes, please — see [CONTRIBUTING.md](CONTRIBUTING.md). Voice blends, another
