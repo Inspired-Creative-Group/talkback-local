@@ -91,9 +91,13 @@ against a clean home directory, including the re-run upgrade path.
 
 The installer sets up code and dependencies but **does not download the voice
 model**. The first time the server starts it fetches Kokoro-82M from Hugging Face
-— about **320 MB**, once. Expect a minute or two of apparent silence on that
-first start. It is cached permanently after that and never downloads again, so
-every later start is instant and the whole thing works offline.
+— **312 MB**, once.
+
+Measured from a completely cold start on an M4 with an empty cache: the installer
+finishes in **29 seconds**, and the server is answering **20 seconds** after that,
+download included. Slower connections will take longer, and it is cached
+permanently afterwards — every later start is instant, and the whole thing works
+offline from then on.
 
 If your first `TTS on` produces nothing, give it a couple of minutes and check
 `~/.claude/automation/kokoro/server.log`.
