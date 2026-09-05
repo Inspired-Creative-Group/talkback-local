@@ -176,11 +176,15 @@ An agent's reply is full of things nobody wants read aloud. Before synthesis:
 Substitutions replace rather than delete, so sentences stay grammatical. "Open a
 link and check it" is something you can say out loud. A gap is not.
 
-**Code is deliberately never read aloud.** A bash one-liner spelled out character
-by character is unlistenable, and the code is already on your screen — the prose
-around it is where the meaning is. One consequence worth expecting: a reply that
-is almost entirely code will speak only the sentence or two wrapping it. That is
-working correctly, not failing.
+**Code is handled, not skipped.** A code block becomes the words *"shown on
+screen"* — because you are listening, so the useful thing is being told where to
+look, not hearing a bash one-liner spelled out character by character. Inline
+code is spoken when it is sayable (`shush`, `main.py`, `TTS on` are often the
+most important word in the sentence) and becomes *"a command"* only when it is
+genuinely unlistenable, like a string of flags.
+
+So *"The fix is one line, shown on screen. It goes at the end of line 66"* — you
+get the meaning and a pointer, and your eyes do the rest.
 
 ---
 
@@ -252,9 +256,10 @@ That needs a mouse click each time, uses a voice you cannot change, and depends
 on their service. This speaks automatically, in a voice you choose or blend
 yourself, entirely locally.
 
-**Why did it only say one sentence?**
-Code is never read aloud — a code-heavy reply speaks only the prose around it.
-That is by design; the code is on your screen.
+**What happens to code in a reply?**
+A code block is spoken as "shown on screen" — a pointer to where you should look
+rather than a gap. Short inline code is read normally; long strings of flags
+become "a command".
 
 **Can I stop it while it is talking?**
 Say or type `shush`. It stops in well under a second, without waiting for the

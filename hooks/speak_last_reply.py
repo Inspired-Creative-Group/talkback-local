@@ -23,6 +23,21 @@ def say_time(m):
         return n2w(h12) + " oh " + ONES[mi]
     return n2w(h12) + " " + n2w(mi)
 
+
+SAYABLE = re.compile(r"^[A-Za-z][A-Za-z0-9 ._-]{0,24}$")
+
+def say_inline(m):
+    """Inline code is often the most important word in the sentence — `shush`,
+    `main.py`, `TTS on`. Speak those. Only replace the unlistenable ones: long,
+    or full of flags and symbols. Deleting them outright left broken sentences
+    ("Run  first")."""
+    t = m.group(1).strip()
+    if not t:
+        return ""
+    if SAYABLE.match(t) and t.count(".") <= 1:
+        return t
+    return "a command"
+
 # ElevenLabs fallback engine only — the local Kokoro path ignores this.
 # Set TTS_VOICE_ID to your own voice; there is deliberately no default, so a
 # borrowed voice can never ship in a public checkout.
@@ -47,8 +62,10 @@ with open(tp, errors="ignore") as f:
             last = t
 
 s = last
-s = re.sub(r"```.*?```", "", s, flags=re.S)
-s = re.sub(r"`[^`]*`", "", s)
+# A code block becomes a pointer, not a gap: you are listening, so the useful
+# thing is being told where to look.
+s = re.sub(r"```.*?```", " shown on screen. ", s, flags=re.S)
+s = re.sub(r"`([^`]*)`", say_inline, s)
 s = re.sub(r"^\s*#{1,6}\s*", "", s, flags=re.M)
 s = re.sub(r"\*\*|\*", "", s)
 s = re.sub(r"__(\S.*?)__", r"\1", s)
@@ -71,6 +88,7 @@ s = re.sub(r"\.{2,}", ".", s)
 s = re.sub(r"\n{2,}", ". ", s)
 s = re.sub(r"\.\s*\.", ".", s)                    # no ".." from joined lines
 s = re.sub(r"[^\w\s.,;:!?'()%$-]", " ", s)        # drop stray symbols entirely
+s = re.sub(r"[:,]\s*(shown on screen)", r", \1", s)   # "one line: shown on screen" -> "one line, shown on screen"
 s = re.sub(r"\s+([.,;:!?])", r"\1", s)
 s = re.sub(r"[ \t]{2,}", " ", s).strip()[:2500]
 
