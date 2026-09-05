@@ -102,20 +102,47 @@ Re-run `./install.sh`. It is idempotent — safe to run over an existing install
 
 ## Why local
 
-The first version of this used a cloud voice. It sounded excellent and burned a
-month of credits in two days — roughly a million characters of ordinary working
-sessions. Reading every reply aloud is simply a lot of speech.
+**Everything your agent says would have to be sent somewhere.**
 
-[Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) is 82 million parameters
-and Apache-2.0 licensed. Held resident in memory it answers faster than the cloud
-API it replaced, because nothing leaves the machine.
+A cloud voice works by uploading the text to be spoken. That text is your agent's
+replies — which means your file paths, your architecture, your client names, your
+credentials when they appear in a diagnosis, your unreleased work. Every answer,
+all day, to a third party with its own retention policy and its own breaches to
+come.
 
-Cost per reply: zero. Quota: none. Works on a plane.
+You have already accepted one such relationship, deliberately, because the model
+is the thing you cannot run yourself. That is a considered trade. Adding a second
+vendor — for the comparatively simple job of turning text into sound — is not a
+trade, it is a leak with no upside.
 
-Local also means **consistent**. A cloud voice varies with network conditions and
-service load; this one behaves the same at nine in the morning and midnight, on
-wifi or off it. When you are recording, or simply relying on it, that matters more
-than raw quality.
+**So the voice runs on your machine.**
+[Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) is 82 million parameters,
+Apache-2.0 licensed, and genuinely good — natural prosody, 28 English voices plus
+other languages, and any two can be blended into a voice that is yours alone.
+After the one-time model download, nothing leaves the computer: no account, no
+API key, no telemetry, no log of what your agent told you sitting on someone
+else's disk.
+
+What that buys you, in order:
+
+- **Privacy.** The one thing said out loud in your studio stays in your studio.
+- **No cost, ever.** Zero per word, per hour, per month. Reading every reply aloud
+  is a lot of speech — enough that any metered service becomes a decision you have
+  to keep making.
+- **Consistency.** A cloud voice varies with network conditions and service load.
+  This one behaves identically at nine in the morning and at midnight, on wifi or
+  off it. When you are recording, that matters more than raw quality.
+- **It cannot be taken away.** No pricing change, no deprecated model, no outage
+  during a take, no terms you have to re-read.
+
+It is also faster. Held resident in memory, it answers more quickly than the
+network round trip it replaces — roughly thirteen seconds of speech per second of
+compute on an idle Apple Silicon machine.
+
+**The principle, not just the feature.** Send out only what genuinely has to
+leave. Everything else — your voice, your notes, your memory of the work — stays
+where you can see it. A local voice is a small thing on its own, and it is the
+right default for every part of a system you would rather own than rent.
 
 ---
 
@@ -205,8 +232,14 @@ This is one. It runs Kokoro-82M locally, so there is no API key and no usage
 cost at all, however much you use it.
 
 **Does it work offline?**
-Yes. After the one-time model download, nothing leaves your machine — no
-network call, no account, no telemetry.
+Yes. After the one-time model download, nothing leaves your machine — no network
+call, no account, no telemetry.
+
+**Is it private? Does my agent's output get sent anywhere?**
+No. A cloud voice would have to upload every reply — your paths, your
+architecture, your client names — to a third party. Talkback Local synthesises on
+your own machine, so none of it leaves. You are already trusting one vendor with
+the model; there is no reason to add a second for turning text into sound.
 
 **How is this different from the Claude desktop app's read-aloud button?**
 That needs a mouse click each time, uses a voice you cannot change, and depends
