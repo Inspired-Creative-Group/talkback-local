@@ -5,15 +5,32 @@
 Claude Code speaks its replies in a voice that runs entirely on your own machine.
 No API key, no quota, no per-word cost, no audio ever leaving the computer.
 
-Built because reading a terminal is impossible when your hands are busy and your
-eyes are somewhere else. Talkback turns the agent into something you can listen
-to while you work — and interrupt the moment it stops being useful.
+## Why this exists
+
+**A terminal can't talk to you.** You watch it, or you miss it. That's fine when
+you're sitting still, and useless the moment your hands are busy, your eyes are on
+a camera, or you've walked to the other side of the room.
+
+**The desktop app can read a reply aloud, but you have to ask it to — with a
+mouse.** Click a button, wait, listen. It's slow, it's inconsistent, the voice is
+whatever you're given, and clicking is exactly the thing you can't do when your
+hands are elsewhere. Talkback removes the click: the agent simply speaks, every
+time, and you can stop it with a word.
+
+**Pair it with voice input and you never touch the keyboard.** With a dictation
+tool like [Wispr Flow](https://wisprflow.ai) you talk to the agent; with Talkback
+it talks back — and you can cut it off, or ask it to repeat, by saying so. That is
+a genuine conversation with your work, in either the terminal or the desktop app,
+hands free from end to end.
+
+Everything happens locally. Nothing to click, nothing to configure mid-flow,
+nothing sent anywhere.
 
 ---
 
 ## Five words
 
-Type any of these as a whole message:
+Type — or dictate — any of these as a whole message:
 
 | | |
 |---|---|
@@ -28,6 +45,9 @@ tokens. `shush` lands in well under a second — it never waits for the agent to
 finish thinking.
 
 Speaking is armed **per session**. One terminal talks; the others stay silent.
+
+Because they are single words, they work just as well spoken through a dictation
+tool as typed. `shush` said out loud stops the voice in under a second.
 
 ---
 
@@ -89,6 +109,11 @@ and Apache-2.0 licensed. Held resident in memory it answers faster than the clou
 API it replaced, because nothing leaves the machine.
 
 Cost per reply: zero. Quota: none. Works on a plane.
+
+Local also means **consistent**. A cloud voice varies with network conditions and
+service load; this one behaves the same at nine in the morning and midnight, on
+wifi or off it. When you are recording, or simply relying on it, that matters more
+than raw quality.
 
 ---
 
