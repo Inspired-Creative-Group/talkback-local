@@ -2,8 +2,10 @@
 
 **Local voice for Claude Code. Your coding agent, out loud.**
 
-Claude Code speaks its replies in a voice that runs entirely on your own machine.
-No API key, no quota, no per-word cost, no audio ever leaving the computer.
+Offline text-to-speech for Claude Code on macOS — Claude Code reads its replies
+aloud in a voice running entirely on your own Apple Silicon Mac. No API key, no
+quota, no per-word cost, no audio ever leaving the computer. Hands-free by
+design, and a natural pair with voice dictation.
 
 ## Why this exists
 
@@ -189,6 +191,46 @@ the part worth reading if you are building something similar.
   none of them covered that line. What found it was tagging each synthesis with a
   spoken random number: the same number twice meant one generation played twice,
   and that ended the search in a single listen.
+
+---
+
+## Questions people actually ask
+
+**Can Claude Code read its answers out loud?**
+Not on its own. Talkback Local adds it — the agent speaks every reply
+automatically, with no button to press.
+
+**Is there a free text-to-speech option for Claude Code?**
+This is one. It runs Kokoro-82M locally, so there is no API key and no usage
+cost at all, however much you use it.
+
+**Does it work offline?**
+Yes. After the one-time model download, nothing leaves your machine — no
+network call, no account, no telemetry.
+
+**How is this different from the Claude desktop app's read-aloud button?**
+That needs a mouse click each time, uses a voice you cannot change, and depends
+on their service. This speaks automatically, in a voice you choose or blend
+yourself, entirely locally.
+
+**Can I stop it while it is talking?**
+Say or type `shush`. It stops in well under a second, without waiting for the
+agent.
+
+**Can I use it hands-free with voice dictation?**
+That is the intended use. Dictate to the agent, hear it answer, and interrupt or
+ask for a repeat by speaking. No keyboard, no mouse.
+
+**Does it work in the terminal and in the Claude Code desktop app?**
+Both. It hooks into Claude Code itself, not into any one interface.
+
+**Will it slow my machine down?**
+It holds about 4 GB of memory while resident and is idle otherwise. 16 GB of RAM
+is comfortable.
+
+**Can I use my own voice or a different one?**
+Yes — 28 English voices ship with the model, and any two can be blended into
+something nobody else has. See [VOICE.md](VOICE.md).
 
 ---
 
