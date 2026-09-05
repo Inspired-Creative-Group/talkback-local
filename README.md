@@ -267,9 +267,18 @@ something nobody else has. See [VOICE.md](VOICE.md).
 
 ---
 
+## Contributing
+
+Yes, please — see [CONTRIBUTING.md](CONTRIBUTING.md). Voice blends, another
+platform, and text-rewriting rules for shapes it still reads badly are the most
+useful things to send. Issues and pull requests are open.
+
+---
+
 ## Licence
 
-MIT — see [LICENSE](LICENSE). Kokoro-82M is Apache-2.0.
+MIT — see [LICENSE](LICENSE) and [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+Kokoro-82M is Apache-2.0.
 
 ---
 
