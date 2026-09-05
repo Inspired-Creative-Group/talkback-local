@@ -1,0 +1,16 @@
+#!/bin/bash
+# start | stop | status | restart the warm Kokoro TTS server
+K="$HOME/.claude/automation/kokoro"; PORT="${KOKORO_PORT:-8899}"
+LOG="$K/server.log"
+up() { curl -sf --max-time 1 "http://127.0.0.1:$PORT/" >/dev/null 2>&1; }
+case "$1" in
+  start|"")
+    up && { echo "already running"; exit 0; }
+    pgrep -f "kokoro/server.py" >/dev/null && { echo "a server process is already up (different port?) — not spawning another"; exit 0; }
+    nohup "$K/.venv/bin/python" "$K/server.py" >>"$LOG" 2>&1 &
+    for i in $(seq 1 60); do up && { echo "started (pid $(pgrep -f 'kokoro/server.py' | head -1))"; exit 0; }; sleep 0.5; done
+    echo "failed to start — see $LOG"; exit 1 ;;
+  stop)    pkill -f "kokoro/server.py" && echo stopped || echo "not running" ;;
+  restart) "$0" stop >/dev/null 2>&1; sleep 1; "$0" start ;;
+  status)  up && echo "running on $PORT" || echo "not running" ;;
+esac

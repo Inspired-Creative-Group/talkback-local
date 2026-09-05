@@ -1,0 +1,6 @@
+.venv/
+*.pcm
+*.mp3
+*.wav
+*.log
+__pycache__/

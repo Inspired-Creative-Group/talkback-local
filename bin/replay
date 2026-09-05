@@ -1,0 +1,25 @@
+#!/bin/bash
+# Re-play a session's last spoken reply from disk. No API call, no cost.
+#   replay [session_id]     default: the most recently spoken reply
+# Exit 1 when there is nothing to play, so callers can say so.
+DIR="$HOME/.claude/automation/lastreply"
+SID="$1"
+F=""
+if [ -n "$SID" ]; then
+  for c in "$DIR/$SID.pcm" "$DIR/$SID.mp3" "$DIR/$SID.pcm.part" "$DIR/$SID.mp3.part"; do
+    [ -f "$c" ] && { F="$c"; break; }
+  done
+else
+  F=$(ls -t "$DIR"/*.pcm "$DIR"/*.mp3 "$DIR"/*.part 2>/dev/null | head -1)
+fi
+[ -n "$F" ] && [ -f "$F" ] || { echo "nothing recorded yet"; exit 1; }
+
+"$HOME/bin/shush" quiet 2>/dev/null
+rm -f "$HOME/.claude/automation/.tts-stop"     # shush set it; don't leave it armed
+case "$F" in *.part) echo "replaying (interrupted reply — partial)";; esac
+case "$F" in
+  *.pcm|*.pcm.part) FMT=(-f s16le -ar 24000 -ch_layout mono) ;;
+  *)                FMT=() ;;
+esac
+nohup ffplay "${FMT[@]}" -nodisp -autoexit -loglevel quiet "$F" >/dev/null 2>&1 &
+exit 0

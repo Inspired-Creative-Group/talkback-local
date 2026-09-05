@@ -1,0 +1,63 @@
+#!/bin/bash
+# Which Claude Code sessions are speaking.
+#   recmode            list armed sessions (prunes dead ones first)
+#   recmode off        silence ALL sessions (panic switch)
+#   recmode on [id]    arm a session; with no id, the most recently active one
+#   recmode prune      drop flags for sessions that have gone quiet
+DIR="$HOME/.claude/automation/recording"
+PROJ="$HOME/.claude/projects"
+DEAD_MIN="${RECMODE_DEAD_MIN:-60}"     # quiet this long = session is gone
+mkdir -p "$DIR"
+
+transcript() { find "$PROJ" -name "$1.jsonl" -type f 2>/dev/null | head -1; }
+
+prune() {
+  local n=0 f b t
+  for f in "$DIR"/*; do
+    [ -e "$f" ] || break
+    b=$(basename "$f"); t=$(transcript "$b")
+    # no transcript at all, or untouched for DEAD_MIN minutes -> the session is gone
+    if [ -z "$t" ] || [ -z "$(find "$t" -mmin -"$DEAD_MIN" 2>/dev/null)" ]; then
+      rm -f "$f"; n=$((n+1))
+    fi
+  done
+  echo "$n"
+}
+
+newest_session() {
+  local f
+  f=$(find "$PROJ" -name "*.jsonl" -type f -mmin -120 2>/dev/null \
+      | xargs -r ls -t 2>/dev/null | head -1)
+  [ -n "$f" ] && basename "$f" .jsonl
+}
+
+case "$1" in
+  on)
+    SID="${2:-$(newest_session)}"
+    [ -z "$SID" ] && { echo "no recent session — type 'TTS on' in the session you want"; exit 1; }
+    prune >/dev/null
+    touch "$DIR/$SID"; echo "speaking: ${SID:0:8}"
+    ;;
+  off)
+    n=$(ls -1 "$DIR" 2>/dev/null | wc -l | tr -d ' ')
+    rm -f "$DIR"/* 2>/dev/null; "$HOME/bin/shush" quiet 2>/dev/null
+    echo "silenced $n session(s)"
+    ;;
+  prune)
+    echo "pruned $(prune) dead session(s)"
+    ;;
+  *)
+    d=$(prune)
+    n=$(ls -1 "$DIR" 2>/dev/null | wc -l | tr -d ' ')
+    [ "$d" != "0" ] && echo "(pruned $d dead)"
+    if [ "$n" = "0" ]; then echo "OFF — no session is speaking"; else
+      echo "$n session(s) speaking:"
+      for f in "$DIR"/*; do
+        b=$(basename "$f"); t=$(transcript "$b")
+        p=$(echo "$t" | awk -F/ '{print $(NF-1)}')
+        age=$([ -n "$t" ] && echo "$(( ( $(date +%s) - $(stat -f %m "$t") ) / 60 ))m ago" || echo "?")
+        echo "  ${b:0:8}  ${p:-unknown}  (active $age)"
+      done
+    fi
+    ;;
+esac
