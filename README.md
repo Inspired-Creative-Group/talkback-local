@@ -243,7 +243,7 @@ mixed at any ratio.
 
 ---
 
-## Notes from two days of debugging
+## What days of debugging tell us
 
 The code is 542 lines. Everything below took far longer than writing it, and is
 the part worth reading if you are building something similar.
