@@ -20,11 +20,11 @@ hands are elsewhere. Talkback removes the click: the agent simply speaks, every
 time, and you can stop it with a word.
 
 **Pair it with voice input and you never touch the keyboard.** With a dictation
-tool — [Wispr Flow](https://wisprflow.ai) or [Sotto](https://sotto.to), compared
-[below](#the-other-half--dictation) — you talk to the agent; with Talkback it
-talks back, and you can cut it off, or ask it to repeat, by saying so. That is a
-genuine conversation with your work, in either the terminal or the desktop app,
-hands free from end to end.
+tool — [Wispr Flow](https://wisprflow.ai) or [Sotto](https://sotto.to), neither
+of them ours, [compared below](#dictation--separate-tools-not-part-of-talkback) —
+you talk to the agent; with Talkback it talks back, and you can cut it off, or
+ask it to repeat, by saying so. That is a genuine conversation with your work,
+in either the terminal or the desktop app, hands free from end to end.
 
 Everything happens locally. Nothing to click, nothing to configure mid-flow,
 nothing sent anywhere.
@@ -54,11 +54,12 @@ tool as typed. `shush` said out loud stops the voice in under a second.
 
 ---
 
-## The other half — dictation
+## Dictation — separate tools, not part of Talkback
 
-Talkback is the output half. Input needs a dictation tool, and two are worth
-knowing about. Neither is ours and we are not affiliated with either — we use
-both, and this is what we found.
+**Talkback does not do dictation.** It only speaks; it never listens. To talk to
+the agent you need a separate dictation app, installed and paid for on its own.
+Two are worth knowing about. Neither is ours, we are not affiliated with either,
+and nothing here installs them — we use both, and this is what we found.
 
 | | [Wispr Flow](https://wisprflow.ai) | [Sotto](https://sotto.to) |
 |---|---|---|
@@ -301,7 +302,7 @@ agent.
 **Can I use it hands-free with voice dictation?**
 That is the intended use. Dictate to the agent, hear it answer, and interrupt or
 ask for a repeat by speaking. No keyboard, no mouse. Two dictation tools are
-compared under [The other half](#the-other-half--dictation).
+compared under [Dictation](#dictation--separate-tools-not-part-of-talkback).
 
 **Does it work in the terminal and in the Claude Code desktop app?**
 Both. It hooks into Claude Code itself, not into any one interface.
