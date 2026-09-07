@@ -11,13 +11,16 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from kokoro import KPipeline
 
 HERE  = os.path.dirname(os.path.abspath(__file__))
-PORT  = int(os.environ.get("KOKORO_PORT", "8899"))
+PORT  = int(os.environ.get("KOKORO_PORT", "8910"))
 SPEED = float(os.environ.get("KOKORO_SPEED", "1.15"))
 
 VOICE = torch.load(os.path.join(HERE, "icg_voice.pt"), weights_only=True)
-# Metal GPU by default. The M4's CPU is contended; the GPU is not, so this is
-# what keeps synthesis ahead of playback when the machine is busy.
-DEVICE = os.environ.get("KOKORO_DEVICE") or ("mps" if torch.backends.mps.is_available() else "cpu")
+# CPU by default. Metal looked like the fast path but measured as the slow one
+# (2026-09-07): PyTorch MPS compiles a fresh kernel for every new phrase length,
+# ~3.5s each, and real replies never repeat a length — so nearly every first
+# chunk paid it. Same sentences on the M4 CPU: 0.3s, every time. The launchd
+# job runs at Interactive priority so a busy machine does not starve it.
+DEVICE = os.environ.get("KOKORO_DEVICE") or "cpu"
 try:
     PIPE = KPipeline(lang_code="a", repo_id="hexgrad/Kokoro-82M", device=DEVICE)
 except Exception as e:

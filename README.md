@@ -84,7 +84,7 @@ Either one, plus Talkback, closes the loop: speak, listen, interrupt by saying
 | | |
 |---|---|
 | **OS** | macOS. Playback and the startup item are Apple-specific. |
-| **Chip** | **Apple Silicon required** — M1 or newer. Intel Macs have no Metal backend, so synthesis falls to a slow CPU path; on a 2020 dual-core i3 it would run below realtime, which is worse than useless for speech. |
+| **Chip** | **Apple Silicon** — M1 or newer; measured on an M4. Synthesis runs on the CPU on purpose: Metal was measured and is *slower* for this job (see below). Intel Macs are untested. |
 | **Memory** | **16 GB recommended.** The server holds the model resident at roughly 4 GB. 8 GB works in principle but leaves little room beside a browser and an editor. |
 | **Disk** | About 1.2 GB — 900 MB Python environment, 320 MB model. |
 | **Tools** | `ffmpeg`, `espeak-ng`, `jq`, and [uv](https://docs.astral.sh/uv/). |
@@ -194,6 +194,16 @@ transcript, extracts the reply, and speaks it.
 full, but the first sentence is ready in well under one. Talkback plays each
 sentence while the next is still being generated, so the first words land almost
 immediately regardless of how long the answer is.
+
+**On the CPU, not the GPU.** The obvious choice on Apple Silicon is Metal, and
+that is what the first release shipped. It was the wrong choice, and it took a
+listener to notice: every reply started three to five seconds late, while the
+logs insisted on half a second. The logs were timing the warm case. PyTorch's
+Metal backend compiles a fresh kernel for every new phrase *length*, about 3.5s
+each, and caches it — so a repeated test sentence is fast and a real reply, which
+never repeats a length, never is. The same sentences on the M4's CPU take 0.35s,
+every time. The server runs on the CPU and the launch agent runs it at
+interactive priority so a busy machine does not starve it.
 
 ---
 
@@ -328,9 +338,10 @@ tested is below.
 | Installer, start to finish | **29s** |
 | Cold first start (312 MB model download + load) | **20s** after the installer |
 | Warm start, model already cached | **~4s**, once, at login |
-| Time to first word of a reply | **~1s**, regardless of reply length |
-| Synthesis, idle machine | **~13x realtime** |
-| Synthesis, machine genuinely busy | **~2-3x realtime** |
+| Time to first word of a reply | **~1s**, regardless of reply length — true since the CPU switch; the Metal build was 3–5s and the log hid it |
+| Synthesis of a new sentence, CPU | **0.35s** for ~5s of audio (~13x realtime) |
+| Synthesis of a new sentence, Metal (old default) | **3.3–3.6s** — kernel compile per phrase length; 0.5s only on repeats |
+| Synthesis, machine genuinely busy | **~2-3x realtime** — measured on the old Metal path, not yet re-measured on the CPU |
 | First synthesis after a cold start | 1.1s for 2.6s of audio |
 | Resident memory while running | ~4 GB |
 | Disk | 312 MB model + ~900 MB Python environment |
@@ -351,9 +362,9 @@ engine returning an error instead of audio.
 - **Older macOS.** Built and run on macOS 26.
 - **A machine missing the prerequisites.** The installer checks for them and
   stops with a message, but those paths have never actually failed for real.
-- **Intel Macs are not supported.** No Metal backend means a CPU-only path; on a
-  2020 dual-core i3 it would run below realtime, which is worse than useless for
-  speech.
+- **Intel Macs.** The engine no longer needs Metal, so nothing rules them out in
+  principle — but none has been measured, and an old dual-core will likely run
+  below realtime, which is worse than useless for speech.
 
 If it behaves differently on your hardware, that is worth an issue — those gaps
 are the ones that need other people's machines to close.

@@ -8,8 +8,8 @@ say_fail() {   # a failure must never be silent — that is the whole bug
   echo "$(date '+%F %T') TTS FAILED [$ENGINE]: $msg" >> "$LOG"
   osascript -e "display notification \"${msg//\"/}\" with title \"Voice failed ($ENGINE)\"" >/dev/null 2>&1
   # the local engine is free and independent — use it to announce a cloud failure
-  if [ "$ENGINE" != "kokoro" ] && curl -sf --max-time 1 "http://127.0.0.1:${KOKORO_PORT:-8899}/" >/dev/null 2>&1; then
-    curl -sS -X POST "http://127.0.0.1:${KOKORO_PORT:-8899}/" \
+  if [ "$ENGINE" != "kokoro" ] && curl -sf --max-time 1 "http://127.0.0.1:${KOKORO_PORT:-8910}/" >/dev/null 2>&1; then
+    curl -sS -X POST "http://127.0.0.1:${KOKORO_PORT:-8910}/" \
       --data-binary "Voice failed. $msg" 2>/dev/null \
     | ffplay -f s16le -ar 24000 -ch_layout mono -nodisp -autoexit -loglevel quiet -infbuf - 2>/dev/null &
   fi

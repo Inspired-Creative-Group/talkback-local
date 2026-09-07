@@ -52,7 +52,7 @@ echo "$HASH" > "$SEEN"
 find "$LR" -type f -mtime +2 -delete 2>/dev/null
 
 if [ "$ENGINE" = "kokoro" ]; then
-  curl -sf --max-time 1 "http://127.0.0.1:${KOKORO_PORT:-8899}/" >/dev/null 2>&1 \
+  curl -sf --max-time 1 "http://127.0.0.1:${KOKORO_PORT:-8910}/" >/dev/null 2>&1 \
     || "$HOME/bin/kokoro-server" start >/dev/null 2>&1
 fi
 

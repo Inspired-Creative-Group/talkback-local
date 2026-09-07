@@ -26,7 +26,7 @@ play_pcm() { ffplay -f s16le -ar 24000 -ch_layout mono -nodisp -autoexit -loglev
 rm -f "$STOPFLAG"
 
 if [ "$ENGINE" = "kokoro" ]; then
-  URL="http://127.0.0.1:${KOKORO_PORT:-8899}/"
+  URL="http://127.0.0.1:${KOKORO_PORT:-8910}/"
   COUNT=$(python3 "$HERE/chunk_text.py" "$TMP/text.txt" "$TMP" 2>>"$LOG")
   [ -z "$COUNT" ] && COUNT=0
   fetch() { curl -sS -o "$TMP/a$1.pcm" -X POST "$URL" --data-binary @"$TMP/chunk$(printf %03d "$1").txt"; }
