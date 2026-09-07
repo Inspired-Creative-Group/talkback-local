@@ -20,9 +20,10 @@ hands are elsewhere. Talkback removes the click: the agent simply speaks, every
 time, and you can stop it with a word.
 
 **Pair it with voice input and you never touch the keyboard.** With a dictation
-tool like [Wispr Flow](https://wisprflow.ai) you talk to the agent; with Talkback
-it talks back — and you can cut it off, or ask it to repeat, by saying so. That is
-a genuine conversation with your work, in either the terminal or the desktop app,
+tool — [Wispr Flow](https://wisprflow.ai) or [Sotto](https://sotto.to), compared
+[below](#the-other-half--dictation) — you talk to the agent; with Talkback it
+talks back, and you can cut it off, or ask it to repeat, by saying so. That is a
+genuine conversation with your work, in either the terminal or the desktop app,
 hands free from end to end.
 
 Everything happens locally. Nothing to click, nothing to configure mid-flow,
@@ -50,6 +51,30 @@ Speaking is armed **per session**. One terminal talks; the others stay silent.
 
 Because they are single words, they work just as well spoken through a dictation
 tool as typed. `shush` said out loud stops the voice in under a second.
+
+---
+
+## The other half — dictation
+
+Talkback is the output half. Input needs a dictation tool, and two are worth
+knowing about. Neither is ours and we are not affiliated with either — we use
+both, and this is what we found.
+
+| | [Wispr Flow](https://wisprflow.ai) | [Sotto](https://sotto.to) |
+|---|---|---|
+| **Cost** | Subscription | One-time, up to three Macs |
+| **Speech recognition** | Cloud | On-device — Whisper or NVIDIA Parakeet, on the Neural Engine |
+| **Cleanup pass** | Cloud, built in | Optional: Apple Intelligence on-device, a local Ollama model, or a cloud provider you supply |
+| **Works offline** | No | Yes |
+| **Platforms** | macOS, Windows | macOS |
+
+Wispr Flow is the more finished product and the shorter path if you would rather
+not think about any of this. Sotto is the one that matches Talkback's premise —
+nothing leaves the machine — and with Apple Intelligence doing the cleanup pass,
+the round trip stays short enough to feel immediate.
+
+Either one, plus Talkback, closes the loop: speak, listen, interrupt by saying
+`shush`. No keyboard, no mouse.
 
 ---
 
@@ -275,7 +300,8 @@ agent.
 
 **Can I use it hands-free with voice dictation?**
 That is the intended use. Dictate to the agent, hear it answer, and interrupt or
-ask for a repeat by speaking. No keyboard, no mouse.
+ask for a repeat by speaking. No keyboard, no mouse. Two dictation tools are
+compared under [The other half](#the-other-half--dictation).
 
 **Does it work in the terminal and in the Claude Code desktop app?**
 Both. It hooks into Claude Code itself, not into any one interface.
