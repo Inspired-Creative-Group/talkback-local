@@ -40,7 +40,7 @@ Type — or dictate — any of these as a whole message:
 | `TTS on` | this session starts speaking |
 | `TTS off` | it stops, and goes quiet immediately |
 | `shush` | cut it off mid-sentence |
-| `replay` | hear the last answer again, from disk |
+| `replay` | hear the last answer again — re-spoken from its saved text, so it is always the latest one, whole, even if it was cut off |
 | `recmode` | which sessions are speaking |
 
 They are caught before the model ever sees them, so they cost no turn and no

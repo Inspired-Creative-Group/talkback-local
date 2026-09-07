@@ -58,6 +58,13 @@ fi
 
 # The ElevenLabs key stays in $TMP/key — never on the command line, where every
 # `ps` on the machine would show it.
+# Keep the text, not just the audio. The audio file is only written when a
+# reply plays to the end, and a reply cut short — by shush, by "again", or by
+# the next reply's own hook — is killed before that step, so it was never on
+# disk at all. `replay` re-speaks from this file, so "again" is always the
+# latest reply, whole, even mid-sentence. (Found live in a demo, 2026-09-07.)
+cp "$TMP/text.txt" "$LR/.$SID.txt.tmp" && mv "$LR/.$SID.txt.tmp" "$LR/$SID.txt"
+
 nohup "$N/play_reply.sh" "$ENGINE" "$TMP" "$SAVE" "$LOG" >/dev/null 2>&1 &
 
 echo "$(date '+%F %T') speaking ${CHARS} chars via $ENGINE (pid $!)" >> "$LOG"

@@ -65,11 +65,11 @@ if ! "$HERE/verify_audio.sh" "$PART" "$ENGINE" "$LOG"; then
   rm -f "$PART"; rm -rf "$TMP"; exit 0
 fi
 
-# Publish only a complete reply. A shush leaves a partial recording that replay
-# must not present as the whole answer.
+# Publish only a complete reply. An interrupted one is dropped: `replay`
+# re-speaks from the saved text, so a partial recording has no reader.
 if [ "$DL" = "0" ] && [ "$STOPPED" = "0" ]; then
   mv "$PART" "$SAVE"
 else
-  rm -f "$SAVE" 2>/dev/null      # the .part stays; replay falls back to it and says so
+  rm -f "$PART" "$SAVE" 2>/dev/null
 fi
 rm -rf "$TMP"

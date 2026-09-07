@@ -1,25 +1,46 @@
 #!/bin/bash
-# Re-play a session's last spoken reply from disk. No API call, no cost.
+# Say a session's last reply again. No API call, no cost.
 #   replay [session_id]     default: the most recently spoken reply
+# Re-speaks from the saved text through the local engine, so it is always the
+# latest reply and always the whole thing — the audio file on disk only exists
+# for replies that played to the end, and a reply cut short by shush, by
+# "again", or by the next reply never got that far (demo bug, 2026-09-07).
+# The audio file is the fallback when there is no text or no local engine.
 # Exit 1 when there is nothing to play, so callers can say so.
+N="$HOME/.claude/automation/notifications"
 DIR="$HOME/.claude/automation/lastreply"
+LOG="$N/speak.log"
 SID="$1"
+
+TXT=""
+if [ -n "$SID" ]; then
+  [ -f "$DIR/$SID.txt" ] && TXT="$DIR/$SID.txt"
+else
+  TXT=$(ls -t "$DIR"/*.txt 2>/dev/null | head -1)
+  [ -n "$TXT" ] && SID=$(basename "$TXT" .txt)
+fi
+
+if [ -n "$TXT" ] && [ -s "$TXT" ] \
+   && curl -sf --max-time 1 "http://127.0.0.1:${KOKORO_PORT:-8910}/" >/dev/null 2>&1; then
+  "$HOME/bin/shush" quiet 2>/dev/null
+  TMP=$(mktemp -d); cp "$TXT" "$TMP/text.txt"
+  nohup "$N/play_reply.sh" kokoro "$TMP" "$DIR/$SID.pcm" "$LOG" >/dev/null 2>&1 &
+  exit 0
+fi
+
+# Fallback: the last complete recording on disk.
 F=""
 if [ -n "$SID" ]; then
-  for c in "$DIR/$SID.pcm" "$DIR/$SID.mp3" "$DIR/$SID.pcm.part" "$DIR/$SID.mp3.part"; do
-    [ -f "$c" ] && { F="$c"; break; }
-  done
+  for c in "$DIR/$SID.pcm" "$DIR/$SID.mp3"; do [ -f "$c" ] && { F="$c"; break; }; done
 else
-  F=$(ls -t "$DIR"/*.pcm "$DIR"/*.mp3 "$DIR"/*.part 2>/dev/null | head -1)
+  F=$(ls -t "$DIR"/*.pcm "$DIR"/*.mp3 2>/dev/null | head -1)
 fi
 [ -n "$F" ] && [ -f "$F" ] || { echo "nothing recorded yet"; exit 1; }
-
 "$HOME/bin/shush" quiet 2>/dev/null
-rm -f "$HOME/.claude/automation/.tts-stop"     # shush set it; don't leave it armed
-case "$F" in *.part) echo "replaying (interrupted reply — partial)";; esac
+rm -f "$HOME/.claude/automation/.tts-stop"
 case "$F" in
-  *.pcm|*.pcm.part) FMT=(-f s16le -ar 24000 -ch_layout mono) ;;
-  *)                FMT=() ;;
+  *.pcm) FMT=(-f s16le -ar 24000 -ch_layout mono) ;;
+  *)     FMT=() ;;
 esac
 nohup ffplay "${FMT[@]}" -nodisp -autoexit -loglevel quiet "$F" >/dev/null 2>&1 &
 exit 0
