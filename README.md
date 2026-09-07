@@ -66,7 +66,7 @@ both, and this is what we found.
 | **Speech recognition** | Cloud | On-device — Whisper or NVIDIA Parakeet, on the Neural Engine |
 | **Cleanup pass** | Cloud, built in | Optional: Apple Intelligence on-device, a local Ollama model, or a cloud provider you supply |
 | **Works offline** | No | Yes |
-| **Platforms** | macOS, Windows | macOS |
+| **Platforms** | macOS, Windows, iOS | macOS |
 
 Wispr Flow is the more finished product and the shorter path if you would rather
 not think about any of this. Sotto is the one that matches Talkback's premise —
