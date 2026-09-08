@@ -79,8 +79,9 @@ def test_non_assistant_and_malformed_lines_are_ignored(tmp_path):
 
 def test_a_non_object_json_line_does_not_abort_the_hook(tmp_path):
     # "a corrupt transcript line must never abort the hook" — a line that parses
-    # as JSON but is not an object is exactly as corrupt as one that does not parse.
-    for junk in ("null", "[]", '"just a string"'):
+    # as JSON but is not an object is exactly as corrupt as one that does not
+    # parse, and so is an assistant line whose message is null.
+    for junk in ("null", "[]", '"just a string"', '{"type": "assistant", "message": null}'):
         tp = write_transcript(tmp_path / f"t-{len(junk)}.jsonl", [assistant_turn("Real reply."), junk])
         assert slr.last_assistant_text(tp) == "Real reply."
 
