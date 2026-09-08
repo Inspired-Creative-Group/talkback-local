@@ -44,7 +44,7 @@ def say_inline(m):
 def last_assistant_text(path):
     """The text of the last assistant turn that said anything: tool-only turns
     are skipped, the text blocks of a multi-block turn are joined, and a line
-    that is not JSON is ignored rather than aborting the hook."""
+    that is not a JSON object is ignored rather than aborting the hook."""
     last = ""
     with open(path, errors="ignore") as f:
         for line in f:
@@ -52,9 +52,9 @@ def last_assistant_text(path):
                 o = json.loads(line)
             except Exception:  # noqa: BLE001, S112  # a corrupt transcript line must never abort the hook
                 continue
-            if o.get("type") != "assistant":
+            if not isinstance(o, dict) or o.get("type") != "assistant":
                 continue
-            c = o.get("message", {}).get("content")
+            c = (o.get("message") or {}).get("content")
             if not isinstance(c, list):
                 continue
             t = "".join(b.get("text", "") for b in c
