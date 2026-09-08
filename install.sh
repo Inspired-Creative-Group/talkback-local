@@ -51,7 +51,9 @@ p = os.path.expanduser("~/.claude/settings.json")
 d = json.load(open(p)) if os.path.exists(p) else {}
 h = d.setdefault("hooks", {})
 def ensure(event, cmd):
-    blocks = h.setdefault(event, [{"matcher": "", "hooks": []}])
+    blocks = h.setdefault(event, [])
+    if not blocks:                      # an emptied list is what Claude Code leaves behind
+        blocks.append({"matcher": "", "hooks": []})
     entries = blocks[0].setdefault("hooks", [])
     if not any(cmd in e.get("command", "") for e in entries):
         entries.append({"type": "command", "command": cmd})
