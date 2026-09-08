@@ -353,7 +353,9 @@ the rest is still being generated.
 
 A full install from a clean home directory with an empty model cache, the re-run
 upgrade path, and the failure paths — an interrupted reply, a stopped server, an
-engine returning an error instead of audio.
+engine returning an error instead of audio. Most of that is now pinned by the
+automated suite described under [Tests](#tests), which runs on every pull
+request.
 
 ### What has not
 
@@ -368,6 +370,42 @@ engine returning an error instead of audio.
 
 If it behaves differently on your hardware, that is worth an issue — those gaps
 are the ones that need other people's machines to close.
+
+## Tests
+
+There is a test suite, and CI runs it on every pull request (macOS, Python
+3.11 to 3.13). To run it yourself:
+
+```bash
+pip install -r requirements-dev.txt && pytest -q
+# or, without touching your Python:
+uv run --isolated --no-project --python 3.12 --with-requirements requirements-dev.txt -- pytest -q
+```
+
+145 tests, about 70 seconds on the M4 (`145 passed in 69.33s`); most of that is
+a fake player sleeping for a fraction of a second per chunk. Nothing in it
+touches your live install: every script runs under a throwaway `HOME`, with
+fake `ffplay`, `osascript`, `shush` and `kokoro-server` first on `PATH`, and
+`KOKORO_PORT` pointed anywhere but 8910.
+
+What they cover: pulling the last reply out of the transcript and rewriting it
+for the ear (code fences, inline code, URLs, emails, ids, clock times); the
+120/400 sentence chunking; the `TTS on` / `shush` / `again` phrases and their
+exit codes; the armed-session check, the saved text and the duplicate guard in
+the Stop hook; the audio sanity check that refuses JSON and HTML error bodies;
+the player script — one play per chunk, the next chunk fetched while the
+current one plays, the stop flag, the recording only published when the reply
+finished; `replay` choosing text over recording; the engine's HTTP contract
+with the model mocked; and the installer end to end in a sandbox, including
+the launchd plist and the `settings.json` merge.
+
+What they do not: the real Kokoro model, real audio out of a speaker, launchd
+actually loading the agent, and the model download. The engine in the tests is
+a small fake HTTP server that hands back fixed PCM, and the player is a shim
+that writes down what it was asked to play. `shush` and `recmode off` are
+faked too — the real ones use a machine-wide `pkill`, which is exactly what a
+test must not do. So a green run says the plumbing is right; it says nothing
+about how it sounds. The listening still has to be done by a person.
 
 ## Contributing
 
