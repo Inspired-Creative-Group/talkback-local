@@ -1,5 +1,7 @@
-import json, os, re, sys, time
-
+import json
+import os
+import re
+import sys
 
 ONES = ["zero","one","two","three","four","five","six","seven","eight","nine",
         "ten","eleven","twelve","thirteen","fourteen","fifteen","sixteen",
@@ -49,7 +51,7 @@ with open(tp, errors="ignore") as f:
     for line in f:
         try:
             o = json.loads(line)
-        except Exception:
+        except Exception:  # noqa: BLE001, S112  # a corrupt transcript line must never abort the hook
             continue
         if o.get("type") != "assistant":
             continue
@@ -64,12 +66,12 @@ with open(tp, errors="ignore") as f:
 s = last
 # A code block becomes a pointer, not a gap: you are listening, so the useful
 # thing is being told where to look.
-s = re.sub(r"```.*?```", " shown on screen. ", s, flags=re.S)
+s = re.sub(r"```.*?```", " shown on screen. ", s, flags=re.DOTALL)
 s = re.sub(r"`([^`]*)`", say_inline, s)
-s = re.sub(r"^\s*#{1,6}\s*", "", s, flags=re.M)
+s = re.sub(r"^\s*#{1,6}\s*", "", s, flags=re.MULTILINE)
 s = re.sub(r"\*\*|\*", "", s)
 s = re.sub(r"__(\S.*?)__", r"\1", s)
-s = re.sub(r"^\s*[-*]\s+", "", s, flags=re.M)
+s = re.sub(r"^\s*[-*]\s+", "", s, flags=re.MULTILINE)
 s = re.sub(r"\[([^\]]*)\]\(([^)]*)\)", r"\1", s)
 s = re.sub(r"(\w)_(\w)", r"\1 \2", s)
 s = re.sub(r"(\w)_(\w)", r"\1 \2", s)
@@ -99,10 +101,10 @@ if not s:
 key = os.environ.get("ELEVENLABS_API_KEY", "")
 if not key:
     try:
-        txt = open(os.path.expanduser("~/.zshrc"), errors="ignore").read()
+        txt = open(os.path.expanduser("~/.zshrc"), errors="ignore").read()  # noqa: SIM115  # kept single-line; this module is restructured in a later stage
         m = re.search(r"ELEVENLABS_API_KEY=[\"']?([A-Za-z0-9_\-]+)", txt)
         key = m.group(1) if m else ""
-    except Exception:
+    except Exception:  # noqa: BLE001  # an unreadable ~/.zshrc just means no key
         key = ""
 if not key:
     print("no api key", file=sys.stderr)
