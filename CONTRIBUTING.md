@@ -16,10 +16,15 @@ Contributions are welcome, and small ones especially.
 
 ## Before you open a PR
 
-There is no build and no test suite. What matters:
+There is no build. There is a test suite, and CI runs it on every pull request:
 
-1. `bash -n` on any shell script, and `python3 -m py_compile` on any Python.
-2. Actually run it — `TTS on`, ask something, listen to the whole reply.
+1. `pip install -r requirements-dev.txt && pytest -q` — or, with `uv`,
+   `uv run --isolated --no-project --python 3.12 --with-requirements requirements-dev.txt -- pytest -q`.
+   The tests never touch your live install: they run under a throwaway `HOME`
+   with a fake engine and a fake player. `ruff check .`, `shellcheck` and
+   `bash -n` on the shell scripts should also be clean; CI checks all four.
+2. Actually run it — `TTS on`, ask something, listen to the whole reply. The
+   suite proves the plumbing, not the sound.
 3. Try `shush` mid-sentence and `replay` afterwards. Both break easily.
 
 Watch the log at `~/.claude/automation/notifications/speak.log`; it records one

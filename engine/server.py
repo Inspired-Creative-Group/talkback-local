@@ -1,13 +1,17 @@
-#!/usr/bin/env python
 """Warm Kokoro TTS server. Loads the model once; streams raw PCM per request.
 
 POST / with the text as the body -> s16le, 24000 Hz, mono, streamed sentence by
 sentence so playback starts on the first chunk instead of the last.
 """
-import os, sys, warnings, threading
+import os
+import threading
+import warnings
+
 warnings.filterwarnings("ignore")
-import numpy as np, torch
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+import numpy as np
+import torch
 from kokoro import KPipeline
 
 HERE  = os.path.dirname(os.path.abspath(__file__))
@@ -23,7 +27,7 @@ VOICE = torch.load(os.path.join(HERE, "icg_voice.pt"), weights_only=True)
 DEVICE = os.environ.get("KOKORO_DEVICE") or "cpu"
 try:
     PIPE = KPipeline(lang_code="a", repo_id="hexgrad/Kokoro-82M", device=DEVICE)
-except Exception as e:
+except Exception as e:  # noqa: BLE001  # whatever the device raises, fall back to cpu
     print(f"device {DEVICE} failed ({e}); falling back to cpu", flush=True)
     DEVICE = "cpu"
     PIPE = KPipeline(lang_code="a", repo_id="hexgrad/Kokoro-82M", device=DEVICE)
@@ -50,7 +54,7 @@ class H(BaseHTTPRequestHandler):
         text = self.rfile.read(int(self.headers.get("Content-Length", 0))).decode("utf-8", "replace")
         try:
             logreq(text, self.client_address[0])
-        except Exception:
+        except Exception:  # noqa: BLE001, S110  # request logging is best-effort; never break synthesis
             pass
         if not text.strip():
             self.send_response(400); self.end_headers(); return
