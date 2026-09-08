@@ -16,6 +16,7 @@ TXT=""
 if [ -n "$SID" ]; then
   [ -f "$DIR/$SID.txt" ] && TXT="$DIR/$SID.txt"
 else
+  # shellcheck disable=SC2012  # newest by mtime; BSD find cannot sort by time, and names are session ids
   TXT=$(ls -t "$DIR"/*.txt 2>/dev/null | head -1)
   [ -n "$TXT" ] && SID=$(basename "$TXT" .txt)
 fi
@@ -33,6 +34,7 @@ F=""
 if [ -n "$SID" ]; then
   for c in "$DIR/$SID.pcm" "$DIR/$SID.mp3"; do [ -f "$c" ] && { F="$c"; break; }; done
 else
+  # shellcheck disable=SC2012  # newest by mtime; BSD find cannot sort by time, and names are session ids
   F=$(ls -t "$DIR"/*.pcm "$DIR"/*.mp3 2>/dev/null | head -1)
 fi
 [ -n "$F" ] && [ -f "$F" ] || { echo "nothing recorded yet"; exit 1; }

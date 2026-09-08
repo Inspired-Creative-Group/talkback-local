@@ -39,6 +39,7 @@ case "$1" in
     touch "$DIR/$SID"; echo "speaking: ${SID:0:8}"
     ;;
   off)
+    # shellcheck disable=SC2012  # counting flag files named by session id; find would also count dotfiles
     n=$(ls -1 "$DIR" 2>/dev/null | wc -l | tr -d ' ')
     rm -f "$DIR"/* 2>/dev/null; "$HOME/bin/shush" quiet 2>/dev/null
     echo "silenced $n session(s)"
@@ -48,6 +49,7 @@ case "$1" in
     ;;
   *)
     d=$(prune)
+    # shellcheck disable=SC2012  # counting flag files named by session id; find would also count dotfiles
     n=$(ls -1 "$DIR" 2>/dev/null | wc -l | tr -d ' ')
     [ "$d" != "0" ] && echo "(pruned $d dead)"
     if [ "$n" = "0" ]; then echo "OFF — no session is speaking"; else
