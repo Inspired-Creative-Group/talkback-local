@@ -1,3 +1,28 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "talkback-local"
+version = "0.2.0"
+description = "Claude Code reads its replies aloud through a local voice engine. One Python runtime for the hooks and the CLI."
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.11"
+dependencies = ["sounddevice>=0.4.6"]
+
+[project.optional-dependencies]
+# The macOS default engine: PyTorch kokoro (what engine/requirements.txt lists).
+torch = ["kokoro", "soundfile", "huggingface_hub"]
+# TALKBACK_ENGINE=onnx — no PyTorch, no espeak-ng install; the Windows route.
+onnx = ["kokoro-onnx", "numpy"]
+
+[project.scripts]
+talkback = "talkback.cli:main"
+
+[tool.setuptools]
+packages = ["talkback"]
+
 [tool.ruff]
 # Default rule set on purpose — no select/extend-select.
 
@@ -8,3 +33,4 @@
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = ["pure: no sandbox, no subprocess, no symlink, no bash — runs on windows-latest"]
