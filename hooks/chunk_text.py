@@ -10,7 +10,7 @@ sents = re.split(r'(?<=[.!?])\s+', text)
 chunks, cur, first = [], "", True
 for s in sents:
     limit = 120 if first else 400
-    if cur and len(cur) + len(s) > limit:
+    if cur and len(cur) + 1 + len(s) > limit:   # +1: the joining space below
         chunks.append(cur.strip()); cur = s; first = False
     else:
         cur = (cur + " " + s).strip()
