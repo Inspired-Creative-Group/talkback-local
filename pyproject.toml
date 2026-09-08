@@ -1,0 +1,10 @@
+[tool.ruff]
+# Default rule set on purpose — no select/extend-select.
+
+[tool.ruff.lint.per-file-ignores]
+# warnings.filterwarnings("ignore") must run before torch is imported, so the
+# heavy imports sit below it deliberately. Not a mistake to "fix".
+"engine/server.py" = ["E402"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
