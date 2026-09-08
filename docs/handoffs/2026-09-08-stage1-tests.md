@@ -4,7 +4,9 @@
 
 ## Status
 
-**Complete on the branch, not pushed, not merged — blocked on a GitHub credential, not on the work.** 145 tests, green on Python 3.11, 3.12 and 3.13, with `ruff`, `shellcheck` and `bash -n` clean; four real bugs found by the tests and fixed test-first; CI workflow in place. `git push -u origin stage1-tests` was refused by GitHub: *"refusing to allow an OAuth App to create or update workflow `.github/workflows/ci.yml` without `workflow` scope"*. The `gh` token on the M4 has `repo, gist, read:org, admin:public_key` only, and the M4's SSH key is not registered on GitHub (`Permission denied (publickey)`). Every way past that — `gh auth refresh -h github.com -s workflow` (browser login), registering the key, or a PAT with `workflow` — changes Juan's GitHub account permissions and was left to him. Rewriting the branch to drop the workflow commit was not an option (no rebase, and the workflow is the deliverable). Once the credential is fixed the remaining steps are: push, open the PR "Stage 1: tests and CI" against `main`, watch CI on 3.11/3.12/3.13, merge with a merge commit, watch `main`'s run.
+**MERGED. `main` is green.** PR [#1](https://github.com/Inspired-Creative-Group/talkback-local/pull/1) "Stage 1: tests and CI" merged 2026-09-08 with a merge commit (`c31b062`) so the test-first history survives. CI on the PR: 3.11 / 3.12 / 3.13 all passed on the first run ([run 34247614004](https://github.com/Inspired-Creative-Group/talkback-local/actions/runs/34247614004)); CI on `main` after the merge: success ([run 34247895435](https://github.com/Inspired-Creative-Group/talkback-local/actions/runs/34247895435)). 145 tests, green on Python 3.11, 3.12 and 3.13, with `ruff`, `shellcheck` and `bash -n` clean; four real bugs found by the tests and fixed test-first. **Gate to Stage 2 is met.** The live install on the M4 has not been updated yet — Juan re-runs `install.sh` to apply the four fixes.
+
+*Earlier the same day the push was refused: "refusing to allow an OAuth App to create or update workflow `.github/workflows/ci.yml` without `workflow` scope" — the M4's `gh` token had `repo, gist, read:org, admin:public_key` only. Juan fixed it with `gh auth refresh -h github.com -s workflow`; everything after that was one push, one PR, one merge.*
 
 ## What is covered
 
@@ -104,6 +106,7 @@ Refactors with no behaviour change, proven by byte-identical old-vs-new runs: `s
 5. **The `.spoken-<sid>` duplicate marker is written before the engine-up check and before playback**, so a reply lost to a downed engine is still suppressed as a duplicate if identical text comes back within 120 s. Deliberate per the script comment; your call whether that is the behaviour you want.
 
 ## Parked
+- CI logs warn that `actions/checkout@v4` and `actions/setup-python@v5` target Node.js 20, which GitHub is forcing onto Node 24 — a warning today, a failure eventually; bump both in Stage 2 (verbatim: "Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24").
 
 Deduplicated from every phase's list; none of it is in the plan.
 
