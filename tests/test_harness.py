@@ -1,9 +1,12 @@
 """Smoke tests for the harness itself: the sandbox never reaches the real
-install, the fake engine answers, the fake player records instead of playing."""
+install, the fake engine answers, the fake sounddevice records instead of
+playing, and nothing in the sandbox can pkill."""
 
 import json
 import os
+import sys
 
+import pytest
 from conftest import (
     NON_SILENT_PCM,
     assistant_turn,
@@ -17,19 +20,24 @@ from conftest import (
 def test_env_is_clean(sandbox):
     env = sandbox.env
     assert not [k for k in env if k.startswith(("TTS_", "ELEVENLABS_"))]
+    # TALKBACK_PYTHON is set on purpose (the .sh shims exec it); nothing else
+    # from the TALKBACK_ family may leak in from the pytest process.
+    assert [k for k in env if k.startswith("TALKBACK_")] == ["TALKBACK_PYTHON"]
+    assert env["TALKBACK_PYTHON"] == sys.executable
     assert env["KOKORO_PORT"] != "8910"
     assert env["HOME"] == str(sandbox.home)
     assert env["PATH"].split(os.pathsep)[0] == str(sandbox.shims)
+    assert env["PYTHONPATH"].split(os.pathsep)[0] == str(sandbox.fakes)
     assert (sandbox.hooks / "speak_last_reply.sh").exists()
     assert os.access(sandbox.hooks / "play_reply.sh", os.X_OK)
     assert (sandbox.bin / "replay").exists()
     assert sandbox.recording.is_dir()
     assert sandbox.lastreply.is_dir()
+    assert not sandbox.player_pid.exists()
+    assert not sandbox.server_pid.exists()
 
 
 def test_python3_is_the_test_interpreter(sandbox):
-    import sys
-
     r = sandbox.run(["python3", "-c", "import sys; print(sys.version_info[:2])"])
     assert r.returncode == 0
     assert r.stdout.strip() == str(sys.version_info[:2])
@@ -67,34 +75,97 @@ def test_fake_engine_rejects_empty_body(sandbox, fake_engine):
     assert r.stdout == "400"
 
 
-def test_fake_ffplay_records_and_never_plays(sandbox):
-    r = sandbox.run(["ffplay", "-f", "s16le", "-ar", "24000", "-ch_layout", "mono", "-nodisp", "/nonexistent.pcm"])
-    assert r.returncode == 0
+_STREAM = (
+    "import sounddevice as sd, sys\n"
+    "print(sd.__file__)\n"
+    "s = sd.RawOutputStream(samplerate=24000, channels=2, dtype='int16')\n"
+    "s.start()\n"
+    "s.write(bytes({n}))\n"
+    "s.close()\n"
+)
+
+
+def test_fake_sounddevice_records_and_never_plays(sandbox):
+    r = sandbox.run(["python3", "-c", _STREAM.format(n=4800)])
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.strip().startswith(str(sandbox.fakes) + os.sep)
     calls = sandbox.read_calls()
-    assert [c[1] for c in calls] == ["ffplay", "ffplay-done"]
-    assert calls[0][2] == ["-f", "s16le", "-ar", "24000", "-ch_layout", "mono", "-nodisp", "/nonexistent.pcm"]
-    assert calls[1][0] - calls[0][0] >= 0.15
-    which = sandbox.run(["/bin/bash", "-c", "command -v ffplay"])
-    assert which.stdout.strip() == str(sandbox.shims / "ffplay")
-
-
-def test_fake_ffplay_can_raise_the_stop_flag(sandbox):
-    env = dict(sandbox.env, FAKE_FFPLAY_TOUCH_STOP="1", FAKE_FFPLAY_SLEEP="0")
+    assert [c[1] for c in calls] == ["play", "write", "play-done"]
+    assert calls[0][2] == ["24000", "2", "int16"]
+    assert calls[1][2] == ["4800"]
+    assert calls[2][0] - calls[0][0] >= 0.15
+    assert sandbox.plays() == [["24000", "2", "int16"]]
+    assert sandbox.writes() == [4800]
     assert not sandbox.stopflag.exists()
-    sandbox.run(["ffplay", "x.pcm"], env=env)
-    assert sandbox.stopflag.exists()
 
 
-def test_fake_shush_and_kokoro_server_only_log(sandbox):
-    assert sandbox.run(["shush", "quiet"]).returncode == 0
-    assert sandbox.run(["kokoro-server", "start"]).returncode == 0
+def test_fake_sounddevice_as_a_context_manager_logs_the_same(sandbox):
+    src = (
+        "import sounddevice as sd\n"
+        "with sd.RawOutputStream(samplerate=24000, channels=2, dtype='int16') as s:\n"
+        "    s.write(b'\\0' * 100); s.write(b'\\0' * 200)\n"
+    )
+    r = sandbox.run(["python3", "-c", src], env=dict(sandbox.env, FAKE_PLAYER_SLEEP="0"))
+    assert r.returncode == 0, r.stderr
+    assert [c[1] for c in sandbox.read_calls()] == ["play", "write", "write", "play-done"]
+    assert sandbox.writes() == [100, 200]
+
+
+def test_fake_sounddevice_refuses_a_write_before_start(sandbox):
+    src = (
+        "import sounddevice as sd\n"
+        "s = sd.RawOutputStream(samplerate=24000, channels=2, dtype='int16')\n"
+        "try:\n    s.write(b'x')\nexcept sd.PortAudioError:\n    print('refused')\n"
+    )
+    r = sandbox.run(["python3", "-c", src])
+    assert r.stdout.strip() == "refused", r.stderr
+    assert sandbox.read_calls() == []
+
+
+def test_fake_player_can_raise_the_stop_flag(sandbox):
+    env = dict(sandbox.env, FAKE_PLAYER_TOUCH_STOP="1", FAKE_PLAYER_SLEEP="0")
+    assert not sandbox.stopflag.exists()
+    r = sandbox.run(["python3", "-c", _STREAM.format(n=100)], env=env)
+    assert r.returncode == 0, r.stderr
     assert sandbox.stopflag.exists()
-    assert sandbox.calls_to("shush") == [["quiet"]]
-    assert sandbox.calls_to("kokoro-server") == [["start"]]
+    calls = sandbox.read_calls()
+    assert calls[2][0] - calls[0][0] < 0.15
+
+
+def test_fake_models_raise_at_import(sandbox):
+    for mod in ("torch", "kokoro", "kokoro_onnx"):
+        r = sandbox.run(["python3", "-c", f"import {mod}"])
+        assert r.returncode != 0
+        assert "sandbox: the real model is never loaded" in r.stderr, mod
+
+
+def test_no_sandbox_bin_script_can_pkill(sandbox):
+    # Whether a bin file is already a `-m talkback` shim or still the pkill
+    # script (replaced by a stand-in), nothing in the sandbox's ~/bin pkills.
+    names = sorted(p.name for p in sandbox.bin.iterdir())
+    assert {"shush", "replay", "recmode", "kokoro-server"} <= set(names)
+    for p in sandbox.bin.iterdir():
+        assert "pkill" not in p.read_text(errors="ignore"), p.name
+        assert os.access(p, os.X_OK), p.name
+
+
+def test_fake_osascript_only_logs(sandbox):
     assert sandbox.run(["osascript", "-e", 'display notification "x"']).returncode == 0
     assert sandbox.calls_to("osascript") == [["-e", 'display notification "x"']]
+    which = sandbox.run(["/bin/bash", "-c", "command -v osascript"])
+    assert which.stdout.strip() == str(sandbox.shims / "osascript")
 
 
+def test_talkback_is_importable_from_a_sandbox_subprocess(sandbox, repo):
+    r = sandbox.run(["python3", "-c", "import talkback, sys; print(talkback.__file__)"])
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.strip() == str(repo / "talkback" / "__init__.py")
+    r = sandbox.run(sandbox.talkback())
+    assert r.returncode == 2
+    assert "usage: talkback" in r.stderr
+
+
+@pytest.mark.pure
 def test_transcript_helpers(tmp_path):
     p = write_transcript(
         tmp_path / "t.jsonl",

@@ -1,19 +1,22 @@
 """Shared test harness for Talkback Local.
 
 Everything here keeps the tests away from the owner's live install: every
-subprocess runs with HOME pointed at a throwaway sandbox, with fake ``ffplay``
-/ ``osascript`` / ``shush`` / ``kokoro-server`` shims ahead of the real ones on
-PATH, and with KOKORO_PORT pointing at either a dead port or the in-process
-fake engine — never at the real server on 8910. Nothing in this file calls
-``pkill``; teardown only *waits* for the sandbox's own background players.
+subprocess runs with HOME pointed at a throwaway sandbox, with a fake
+``sounddevice`` (and raising fakes of ``torch`` / ``kokoro`` / ``kokoro_onnx``)
+first on PYTHONPATH, fake ``osascript`` / ``python3`` shims ahead of the real
+ones on PATH, and with KOKORO_PORT pointing at either a dead port or the
+in-process fake engine — never at the real server on 8910. Nothing in this
+file calls ``pkill``; teardown only *waits* for the sandbox's own background
+players. The real ``sounddevice`` is never imported by a test.
 
-Standard library only.
+Standard library only. Nothing is created at import time, so this file loads
+on Windows for the ``pure`` tests.
 
 FIXTURES
 --------
 repo : pathlib.Path (session)
     The repository root (the directory that holds ``hooks/``, ``bin/``,
-    ``install.sh``).
+    ``talkback/``, ``install.sh``).
 
 sandbox : Sandbox (function)
     A fresh sandbox HOME per test, built under ``tmp_path``. Attributes:
@@ -23,72 +26,108 @@ sandbox : Sandbox (function)
                  repo's hooks/ copied in, *.sh made executable. This mirrors
                  install.sh, so the scripts find each other via $HOME exactly
                  as in production. Run them as ``sandbox.hooks / "x.sh"``.
-    .bin         home/bin — the REAL bin/replay and bin/recmode copied in, plus
-                 FAKE ``shush`` and ``kokoro-server``:
-                   shush          logs "shush <args>" to the calls log, touches
-                                  the stop flag (like the real one), exits 0.
-                                  It does NOT kill anything — the real shush
-                                  uses machine-wide pkill, which is exactly what
-                                  the sandbox exists to avoid. A background
-                                  play_reply.sh therefore keeps running until it
-                                  notices the stop flag at its next chunk.
-                   kokoro-server  logs "kokoro-server <args>", exits 0. It never
-                                  starts anything; use ``fake_engine`` for a
-                                  live engine.
+    .bin         home/bin — the repo's bin/ copied whole, executable. SAFETY
+                 GUARD: a bin file that still contains ``pkill`` (a script not
+                 yet turned into a ``-m talkback`` shim) is NOT copied; a
+                 logging stand-in takes its place (``shush`` also touches the
+                 stop flag). The real pkill-based scripts never run here.
     .recording   home/.claude/automation/recording  (armed-session flags)
     .lastreply   home/.claude/automation/lastreply  (<sid>.txt / <sid>.pcm)
     .stopflag    home/.claude/automation/.tts-stop
+    .player_pid  home/.claude/automation/.player.pid      (the player's pid file)
+    .server_pid  home/.claude/automation/kokoro/server.pid (the server's pid file)
     .log         .hooks / "speak.log" (may not exist until a hook writes it)
+    .fakes       a dir FIRST on every subprocess's PYTHONPATH holding:
+                   sounddevice.py  the recording fake (see FAKE SOUNDDEVICE)
+                   torch.py, kokoro.py, kokoro_onnx.py
+                                   ``raise ImportError("sandbox: the real model
+                                   is never loaded")`` — so ``talkback server``
+                                   started from a hook dies at import, fast and
+                                   deterministically, whatever the host has.
     .shims       a dir at the front of PATH holding:
-                   ffplay     logs "ffplay <args>", then — if
-                              $FAKE_FFPLAY_TOUCH_STOP is set (any value) —
-                              touches .stopflag, then sleeps
-                              $FAKE_FFPLAY_SLEEP seconds (default 0.15), then
-                              logs "ffplay-done". Drains stdin when given "-".
-                              Never touches the real ffplay or any audio device.
                    osascript  logs "osascript <args>", exits 0.
                    python3    exec-wrapper around sys.executable, so scripts
                               that call python3 run on pytest's interpreter.
-                   jq         symlink to the machine's jq only when jq is not
-                              in /usr/bin:/bin:/usr/sbin:/sbin.
-    .calls       Path of the calls log (one line per shim invocation:
+    .calls       Path of the calls log (one line per recorded event:
                  "<time.time()> <name> <shell-quoted args>").
     .read_calls() -> list[(t: float, name: str, args: list[str])]
-                 Parsed calls log, in order. Names: "ffplay", "ffplay-done",
-                 "osascript", "shush", "kokoro-server".
+                 Parsed calls log, in order. Names: "play", "write",
+                 "play-done", "osascript", and — only while a bin script is
+                 still the pkill version — "shush" / "kokoro-server".
     .calls_to(name) -> list[list[str]]
                  Just the args of every call to ``name``.
+    .plays() -> list[list[str]]
+                 ``calls_to("play")``: one ``[samplerate, channels, dtype]``
+                 (as strings, e.g. ["24000", "2", "int16"]) per stream opened.
+    .writes() -> list[int]
+                 The byte count of every stream write, in order.
     .env         A clean environment dict for subprocesses:
                    HOME=sandbox home
                    PATH=shims:home/bin:/usr/bin:/bin:/usr/sbin:/sbin
+                   PYTHONPATH=<fakes>:<repo>  (fakes first; the checkout second
+                     so ``talkback`` resolves even when it is not installed)
+                   TALKBACK_PYTHON=sys.executable  (what the .sh shims exec)
                    KOKORO_PORT="8999" — a dead port, nothing listens there —
                      unless the ``fake_engine`` fixture is also requested, in
                      which case it is the engine's port.
                    LANG=LC_ALL=en_US.UTF-8, TMPDIR=<sandbox>/tmp
-                 Note: macOS ``mktemp -d`` (as the hooks call it, no template)
-                 ignores TMPDIR and uses the per-user Darwin temp dir, exactly
-                 as in production; play_reply.sh removes its own dir when done.
-                 No TTS_* or ELEVENLABS_* keys. Copy it and add keys to test
-                 tunables: ``env = dict(sandbox.env, TTS_ENGINE="elevenlabs")``.
+                 Built from scratch: no TTS_* / ELEVENLABS_* key, and no
+                 TALKBACK_* key other than TALKBACK_PYTHON. Copy it and add
+                 keys to test tunables: ``env = dict(sandbox.env,
+                 TTS_ENGINE="elevenlabs")``.
     .run(cmd, stdin=None, env=None, timeout=30) -> subprocess.CompletedProcess
                  subprocess.run in text mode with capture_output, cwd=repo,
                  env defaulting to .env. Never raises on a non-zero exit.
+    .talkback(*args) -> list[str]
+                 ``[sys.executable, "-m", "talkback", *args]`` — pass to .run().
     .arm(sid)    touch recording/<sid> (what "TTS on" does).
     .wait_for(predicate, timeout=10, interval=0.05) -> bool
                  Poll until predicate() is truthy; False on timeout.
     .playing() -> bool
-                 True while a play_reply.sh from THIS sandbox is running
-                 (read-only pgrep on the sandbox path).
+                 True while a player from THIS sandbox is running: a
+                 ``-m talkback play`` whose command line carries a path under
+                 the sandbox HOME (read-only pgrep).
     .wait_quiet(timeout=10) -> bool
                  wait_for(lambda: not self.playing()).
 
-    Teardown waits up to 10 s for the sandbox's own play_reply.sh to finish.
+    Teardown waits up to 10 s for the sandbox's own players to finish.
     It never kills anything.
 
+FAKE SOUNDDEVICE (``sandbox.fakes / "sounddevice.py"``)
+----------------------------------------------------
+Imported by every subprocess as ``import sounddevice`` (PYTHONPATH wins over
+site-packages). It never opens an audio device. Mirrors the real API:
+
+    RawOutputStream(samplerate=None, blocksize=None, device=None, channels=None,
+                    dtype=None, **more)          # the real positional order —
+                                                 # pass samplerate/channels/dtype
+                                                 # as KEYWORDS
+      .start()  or  ``with stream:``   logs  play [samplerate, channels, dtype]
+                                       (once per stream)
+      .write(buffer)                   logs  write [nbytes]  (nbytes = len of
+                                       the buffer); on the FIRST write, touches
+                                       the sandbox stop flag when the env var
+                                       FAKE_PLAYER_TOUCH_STOP is set (any
+                                       value); then sleeps FAKE_PLAYER_SLEEP
+                                       seconds (default 0.15) — the stand-in
+                                       for playback time. Raises PortAudioError
+                                       if the stream was never started, as the
+                                       real one does.
+      .stop() / .abort()               no-ops
+      .close()  or leaving ``with``    logs  play-done  (once, if started)
+      .samplerate .channels .dtype .active .closed
+    OutputStream                       same as RawOutputStream (numpy arrays
+                                       expose the buffer protocol)
+    PortAudioError                     the exception class
+    stop(), wait()                     no-ops
+    play(...)                          raises — the mono-in-one-ear path this
+                                       project deliberately avoids
+    sounddevice.__file__ is under sandbox.fakes (asserted by test_harness).
+
 fake_engine : FakeEngine (function; requires sandbox)
-    An in-process threaded HTTP server that stands in for engine/server.py,
-    bound to 127.0.0.1 on the first free port in 8930-8949 (asserted never to
-    be 8910). Sets sandbox.env["KOKORO_PORT"] to its port.
+    An in-process threaded HTTP server that stands in for the engine, bound to
+    127.0.0.1 on the first free port in 8930-8949 (asserted never to be
+    8910). Sets sandbox.env["KOKORO_PORT"] to its port.
       GET  /  -> 200 "ok"
       POST /  -> records {"body": str, "t_start": float, "t_end": float} in
                  .requests, sleeps .delay seconds (default 0.0), then answers:
@@ -118,7 +157,14 @@ hook_payload(session_id, **fields) -> str   JSON for a hook's stdin, e.g.
                                     or hook_payload("sid1", prompt="tts on").
 NON_SILENT_PCM            bytes    the default engine body (4800 bytes).
 
-``repo/hooks`` is on sys.path, so ``import speak_last_reply`` works.
+``repo`` and ``repo/hooks`` are on sys.path, so ``import talkback`` and
+``import speak_last_reply`` work in-process.
+
+MARKERS
+-------
+``@pytest.mark.pure`` — no sandbox, no subprocess, no symlink, no bash: only
+``tmp_path`` and function calls. These are what the windows-latest CI job
+runs (``pytest -q -m pure``).
 """
 
 import http.server
@@ -140,6 +186,7 @@ import pytest
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO / "hooks"))
+sys.path.insert(0, str(REPO))
 
 SYSTEM_PATH = ["/usr/bin", "/bin", "/usr/sbin", "/sbin"]
 DEAD_PORT = "8999"
@@ -189,44 +236,120 @@ def hook_payload(session_id, **fields):
 
 
 # --------------------------------------------------------------------------
-# shim sources
+# shim and fake sources
 # --------------------------------------------------------------------------
 _LOGGER = '''\
 import os, shlex, sys, time
 LOG = {log!r}
 def log(name, args):
     with open(LOG, "a") as f:
-        f.write(f"{{time.time()}} {{name}} {{shlex.join(args)}}\\n")
-'''
-
-_FFPLAY = _LOGGER + '''\
-STOP = {stop!r}
-args = sys.argv[1:]
-log("ffplay", args)
-if os.environ.get("FAKE_FFPLAY_TOUCH_STOP"):
-    open(STOP, "a").close()
-if "-" in args:
-    try:
-        sys.stdin.buffer.read()
-    except OSError:
-        pass
-time.sleep(float(os.environ.get("FAKE_FFPLAY_SLEEP", "0.15")))
-log("ffplay-done", [])
+        f.write(f"{{time.time()}} {{name}} {{shlex.join([str(a) for a in args])}}\\n")
 '''
 
 _OSASCRIPT = _LOGGER + '''\
 log("osascript", sys.argv[1:])
 '''
 
-_SHUSH = _LOGGER + '''\
+# Stand-in for a bin/ script that is still the pkill version (safety guard).
+_STANDIN = _LOGGER + '''\
 STOP = {stop!r}
-log("shush", sys.argv[1:])
-open(STOP, "a").close()
+log({name!r}, sys.argv[1:])
+if {name!r} == "shush":
+    open(STOP, "a").close()
 '''
 
-_KOKORO_SERVER = _LOGGER + '''\
-log("kokoro-server", sys.argv[1:])
+_SOUNDDEVICE = '''\
+"""Sandbox stand-in for the sounddevice module: records stream parameters
+and writes to the calls log, sleeps instead of playing, never opens an audio
+device. See tests/conftest.py, FAKE SOUNDDEVICE."""
+import os, shlex, time
+
+LOG = {log!r}
+STOP = {stop!r}
+
+
+def _log(name, args):
+    with open(LOG, "a") as f:
+        f.write(f"{{time.time()}} {{name}} {{shlex.join([str(a) for a in args])}}\\n")
+
+
+class PortAudioError(Exception):
+    pass
+
+
+class RawOutputStream:
+    def __init__(self, samplerate=None, blocksize=None, device=None, channels=None, dtype=None,
+                 latency=None, extra_settings=None, callback=None, finished_callback=None,
+                 clip_off=None, dither_off=None, never_drop_input=None,
+                 prime_output_buffers_using_stream_callback=None):
+        self.samplerate = samplerate
+        self.blocksize = blocksize
+        self.device = device
+        self.channels = channels
+        self.dtype = dtype
+        self.active = False
+        self.stopped = True
+        self.closed = False
+        self._opened = False
+        self._writes = 0
+
+    def start(self):
+        if self.closed:
+            raise PortAudioError("Error starting stream: the stream is closed")
+        if not self._opened:
+            self._opened = True
+            _log("play", [self.samplerate, self.channels, self.dtype])
+        self.active, self.stopped = True, False
+
+    def stop(self, ignore_errors=True):
+        self.active, self.stopped = False, True
+
+    def abort(self, ignore_errors=True):
+        self.stop()
+
+    def write(self, data):
+        if not self.active:
+            raise PortAudioError("Error writing to stream: the stream is not started")
+        n = memoryview(data).nbytes
+        self._writes += 1
+        _log("write", [n])
+        if self._writes == 1 and os.environ.get("FAKE_PLAYER_TOUCH_STOP"):
+            open(STOP, "a").close()
+        time.sleep(float(os.environ.get("FAKE_PLAYER_SLEEP", "0.15")))
+
+    def close(self, ignore_errors=True):
+        if self.closed:
+            return
+        self.closed = True
+        self.active, self.stopped = False, True
+        if self._opened:
+            _log("play-done", [])
+
+    def __enter__(self):
+        self.start()
+        return self
+
+    def __exit__(self, *exc):
+        self.close()
+
+
+class OutputStream(RawOutputStream):
+    pass
+
+
+def stop(ignore_errors=True):
+    pass
+
+
+def wait(ignore_errors=True):
+    return None
+
+
+def play(*args, **kwargs):
+    raise PortAudioError("sandbox: sd.play() is the mono-in-one-ear path this project avoids; use RawOutputStream")
 '''
+
+_RAISING_MODULE = 'raise ImportError("sandbox: the real model is never loaded")\n'
 
 
 def _write_exec(path, text):
@@ -253,14 +376,19 @@ class Sandbox:
         self.recording = auto / "recording"
         self.lastreply = auto / "lastreply"
         self.stopflag = auto / ".tts-stop"
+        self.player_pid = auto / ".player.pid"
+        self.server_pid = auto / "kokoro" / "server.pid"
         self.log = self.hooks / "speak.log"
         self.shims = root / "shims"
+        self.fakes = root / "fakes"
         self.calls = root / "calls.log"
         self._impl = root / "shim_impl"
         self._tmp = root / "tmp"
-        for d in (self.hooks, self.bin, self.recording, self.lastreply, self.shims, self._impl, self._tmp):
+        for d in (self.hooks, self.bin, self.recording, self.lastreply, self.shims, self.fakes, self._impl, self._tmp):
             d.mkdir(parents=True, exist_ok=True)
         self.calls.touch()
+
+        log, stop = str(self.calls), str(self.stopflag)
 
         # hooks, as install.sh lays them out
         for f in (repo / "hooks").iterdir():
@@ -269,25 +397,31 @@ class Sandbox:
         for f in self.hooks.glob("*.sh"):
             _write_exec(f, f.read_text())
 
-        # real commands that are safe: they only read files and spawn players
-        for name in ("replay", "recmode"):
-            shutil.copy(repo / "bin" / name, self.bin / name)
-            _write_exec(self.bin / name, (self.bin / name).read_text())
+        # bin/, copied whole — except a script that still pkills, which is
+        # replaced by a logging stand-in. The real pkill scripts kill the
+        # owner's live playback; they must never run from a test.
+        for f in (repo / "bin").iterdir():
+            if not f.is_file():
+                continue
+            if "pkill" in f.read_text(errors="ignore"):
+                _shim(self.bin, self._impl, f.name, _STANDIN.format(log=log, stop=stop, name=f.name))
+            else:
+                shutil.copy(f, self.bin / f.name)
+                _write_exec(self.bin / f.name, (self.bin / f.name).read_text())
 
-        log, stop = str(self.calls), str(self.stopflag)
-        _shim(self.bin, self._impl, "shush", _SHUSH.format(log=log, stop=stop))
-        _shim(self.bin, self._impl, "kokoro-server", _KOKORO_SERVER.format(log=log))
-        _shim(self.shims, self._impl, "ffplay", _FFPLAY.format(log=log, stop=stop))
+        # PYTHONPATH fakes: the audio device and the model never get touched
+        (self.fakes / "sounddevice.py").write_text(_SOUNDDEVICE.format(log=log, stop=stop))
+        for name in ("torch", "kokoro", "kokoro_onnx"):
+            (self.fakes / f"{name}.py").write_text(_RAISING_MODULE)
+
         _shim(self.shims, self._impl, "osascript", _OSASCRIPT.format(log=log))
         _write_exec(self.shims / "python3", f'#!/bin/bash\nexec "{sys.executable}" "$@"\n')
-
-        jq = shutil.which("jq", path=os.pathsep.join(SYSTEM_PATH)) or shutil.which("jq")
-        if jq and str(Path(jq).parent) not in SYSTEM_PATH:
-            (self.shims / "jq").symlink_to(jq)
 
         self.env = {
             "HOME": str(self.home),
             "PATH": os.pathsep.join([str(self.shims), str(self.bin), *SYSTEM_PATH]),
+            "PYTHONPATH": os.pathsep.join([str(self.fakes), str(self.repo)]),
+            "TALKBACK_PYTHON": sys.executable,
             "KOKORO_PORT": DEAD_PORT,
             "LANG": "en_US.UTF-8",
             "LC_ALL": "en_US.UTF-8",
@@ -307,6 +441,10 @@ class Sandbox:
             check=False,
         )
 
+    @staticmethod
+    def talkback(*args):
+        return [sys.executable, "-m", "talkback", *[str(a) for a in args]]
+
     def arm(self, sid):
         (self.recording / sid).touch()
 
@@ -321,14 +459,20 @@ class Sandbox:
             time.sleep(interval)
 
     def playing(self):
-        pattern = re.escape(str(self.hooks / "play_reply.sh"))
-        r = subprocess.run(["/usr/bin/pgrep", "-f", pattern], capture_output=True, check=False)
-        return r.returncode == 0
+        patterns = (
+            re.escape("-m talkback play") + ".*" + re.escape(str(self.home)),
+            re.escape(str(self.hooks / "play_reply.sh")),  # the shell worker, until its shim lands
+        )
+        for pattern in patterns:
+            r = subprocess.run(["/usr/bin/pgrep", "-f", pattern], capture_output=True, check=False)
+            if r.returncode == 0:
+                return True
+        return False
 
     def wait_quiet(self, timeout=10):
         return self.wait_for(lambda: not self.playing(), timeout=timeout)
 
-    # -- inspecting the shims ---------------------------------------------
+    # -- inspecting the calls log -----------------------------------------
     def read_calls(self):
         out = []
         for line in self.calls.read_text().splitlines():
@@ -339,6 +483,12 @@ class Sandbox:
 
     def calls_to(self, name):
         return [args for _, n, args in self.read_calls() if n == name]
+
+    def plays(self):
+        return self.calls_to("play")
+
+    def writes(self):
+        return [int(args[0]) for args in self.calls_to("write")]
 
 
 @pytest.fixture(scope="session")
