@@ -53,6 +53,8 @@ log({name!r}, sys.argv[1:])
 
 
 def _write_exec(path, text):
+    if path.is_symlink():  # conftest may have linked the machine's jq here; never write through it
+        path.unlink()
     path.write_text(text)
     path.chmod(path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
