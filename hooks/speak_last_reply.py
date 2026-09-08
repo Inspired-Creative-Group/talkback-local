@@ -124,7 +124,10 @@ def main(argv):
             key = m.group(1) if m else ""
         except Exception:  # noqa: BLE001  # an unreadable ~/.zshrc just means no key
             key = ""
-    if not key:
+    # Only the ElevenLabs engine needs a key. The local engine must speak with
+    # none at all; the key file is still written (empty) so play_reply.sh's
+    # contract does not change.
+    if not key and os.environ.get("TTS_ENGINE", "kokoro") == "elevenlabs":
         print("no api key", file=sys.stderr)
         return 1
 
