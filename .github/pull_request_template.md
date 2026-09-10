@@ -2,7 +2,7 @@
 
 **How you tested it**
 - [ ] `pytest -q` passes
-- [ ] `bash -n` / `py_compile` pass
+- [ ] `ruff check .`, `shellcheck` and `bash -n` pass on the shell shims
 - [ ] Spoke a full reply and listened to all of it
 - [ ] `shush` stops it; `replay` plays it back
 - [ ] `speak.log` shows one playback per reply, not two

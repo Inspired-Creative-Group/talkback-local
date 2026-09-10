@@ -1,4 +1,5 @@
-"""hooks/verify_audio.sh decides whether a downloaded file is really audio.
+"""``talkback verify`` (reached through the kept hooks/verify_audio.sh shim)
+decides whether a downloaded file is really audio.
 
 A 200 response carrying a JSON or HTML error body, or a file too small to be
 speech, must be rejected (exit 1) *loudly*: a dated line in the log, a
@@ -139,13 +140,15 @@ def test_cloud_failure_is_spoken_through_the_local_engine(sandbox, fake_engine, 
     assert fake_engine.requests[0]["body"].startswith("Voice failed")
     assert fake_engine.requests[0]["body"] == "Voice failed. quota exceeded"
 
-    assert sandbox.wait_for(lambda: len(sandbox.calls_to("ffplay-done")) == 1)
-    ffplay = sandbox.calls_to("ffplay")
-    assert len(ffplay) == 1
-    assert ffplay[0][-1] == "-", "the announcement is piped into the player's stdin"
-    assert ffplay[0][:4] == ["-f", "s16le", "-ar", "24000"]
+    assert sandbox.wait_for(lambda: len(sandbox.calls_to("play-done")) == 1)
+    plays = sandbox.plays()
+    assert len(plays) == 1
+    assert plays[0] == ["24000", "2", "int16"]
+    assert sandbox.writes() == [2 * len(NON_SILENT_PCM)]
     assert len(fake_engine.requests) == 1
     assert sandbox.calls_to("osascript") == [_notification("quota exceeded", "elevenlabs")]
+    assert sandbox.wait_quiet()
+    assert not sandbox.player_pid.exists()
 
 
 def test_local_engine_failure_is_not_spoken_through_itself(sandbox, fake_engine, tmp_path):
@@ -157,7 +160,7 @@ def test_local_engine_failure_is_not_spoken_through_itself(sandbox, fake_engine,
     assert r.returncode == 1
     assert _failures(sandbox) == [("kokoro", "quota exceeded")]
     assert fake_engine.requests == []
-    assert sandbox.calls_to("ffplay") == []
+    assert sandbox.plays() == []
     assert sandbox.calls_to("osascript") == [_notification("quota exceeded", "kokoro")]
 
 
@@ -170,5 +173,5 @@ def test_cloud_failure_is_not_spoken_when_local_engine_is_down(sandbox, tmp_path
 
     assert r.returncode == 1
     assert _failures(sandbox) == [("elevenlabs", "quota exceeded")]
-    assert sandbox.calls_to("ffplay") == []
+    assert sandbox.plays() == []
     assert sandbox.calls_to("osascript") == [_notification("quota exceeded", "elevenlabs")]

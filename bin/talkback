@@ -1,0 +1,3 @@
+#!/bin/bash
+# Talkback Local — the terminal command; the code lives in the talkback package (same as the venv's console script).
+exec "${TALKBACK_PYTHON:-python3}" -m talkback "$@"

@@ -1,11 +1,3 @@
 #!/bin/bash
-# Stop Claude mid-reply. `shush` reports; `shush quiet` is silent (used by hooks).
-n=0
-touch "$HOME/.claude/automation/.tts-stop"          # ends the sentence loop, not just the chunk playing
-pkill -f "automation/notifications/play_reply.sh" 2>/dev/null
-# scoped to our own players: the raw-PCM reader and the ElevenLabs stream
-pkill -f "ffplay -f s16le -ar 24000" 2>/dev/null && n=1
-pkill -f "ffplay -nodisp -autoexit -loglevel quiet" 2>/dev/null && n=1
-pkill -f "text-to-speech/.*/stream" 2>/dev/null
-[ "$1" = "quiet" ] && exit 0
-[ "$n" = "1" ] && echo "shushed" || echo "nothing was speaking"
+# Talkback Local — compatibility shim; the code lives in the talkback package. Removed next release.
+exec "${TALKBACK_PYTHON:-python3}" -m talkback shush "$@"

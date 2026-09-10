@@ -1,0 +1,7 @@
+' Talkback Local - Startup-folder launcher (UNTESTED - written for a Windows tester).
+' Rendered by install.ps1 into %APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\talkback.vbs.
+' Starts the engine hidden at login: pythonw.exe has no console window, and the
+' server writes its own server.log when it finds no stdout. The venv path is
+' substituted by the installer; nothing here is read from the environment.
+Set shell = CreateObject("WScript.Shell")
+shell.Run """__VENV_PYTHONW__"" -m talkback server", 0, False

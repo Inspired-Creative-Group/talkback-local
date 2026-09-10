@@ -13,11 +13,11 @@ jobs:
       matrix:
         python-version: ["3.11", "3.12", "3.13"]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Install dev dependencies
+      - name: Install dev dependencies (builds the package too)
         run: pip install -r requirements-dev.txt
       - name: bash -n
         run: bash -n install.sh hooks/*.sh bin/*
@@ -27,3 +27,29 @@ jobs:
         run: ruff check .
       - name: pytest
         run: pytest -q
+
+  # The honest Windows claim: the logic is tested here; install and audio are
+  # not, until a Windows user reports. Only the `pure` tests run (no sandbox,
+  # no subprocess, no audio, no model); install.ps1 is parsed, never executed.
+  windows-logic:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Install dev dependencies (builds the package too)
+        run: pip install -r requirements-dev.txt
+      - name: ruff
+        run: ruff check .
+      - name: pytest (pure tests only)
+        run: pytest -q -m pure
+      - name: install.ps1 parses
+        shell: pwsh
+        run: |
+          $e = $null
+          [System.Management.Automation.Language.Parser]::ParseFile("$PWD/install.ps1", [ref]$null, [ref]$e) | Out-Null
+          if ($e) { $e | ForEach-Object { Write-Error $_.Message }; exit 1 }

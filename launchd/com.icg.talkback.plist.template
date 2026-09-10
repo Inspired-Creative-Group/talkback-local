@@ -7,8 +7,15 @@
     <key>ProgramArguments</key>
     <array>
         <string>__HOME__/.claude/automation/kokoro/.venv/bin/python</string>
-        <string>__HOME__/.claude/automation/kokoro/server.py</string>
+        <string>-m</string>
+        <string>talkback</string>
+        <string>server</string>
     </array>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>KOKORO_PORT</key>
+        <string>__PORT__</string>
+    </dict>
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>

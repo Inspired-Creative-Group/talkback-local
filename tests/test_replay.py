@@ -1,11 +1,12 @@
-"""bin/replay says a session's last reply again.
+"""``talkback replay`` (reached through the kept bin/replay shim) says a
+session's last reply again.
 
 It prefers the saved text re-spoken through the local engine (so "again" is
 always the whole latest reply), falls back to the last complete recording on
 disk when there is no text or no engine, and exits 1 when there is nothing.
 
-Everything runs in the sandbox: the real bin/replay and play_reply.sh, the
-fake engine on its own port, and the ffplay/shush shims. replay backgrounds
+Everything runs in the sandbox: the real bin/replay shim and the real player,
+the fake engine on its own port, and the fake sounddevice. replay detaches
 the player and returns at once, so every test polls for the outcome.
 """
 
@@ -23,6 +24,7 @@ LONG = (
     "The second sentence lands in the second chunk."
 )
 STALE = b"stale-audio" * 400
+STEREO = ["24000", "2", "int16"]
 
 
 def _save_text(sandbox, sid, text, age=0):
@@ -49,7 +51,7 @@ def _log(sandbox):
 
 
 def _wait_played(sandbox):
-    """Block until the backgrounded play_reply.sh has run to completion."""
+    """Block until the detached worker has run to completion."""
     assert sandbox.wait_for(lambda: "PLAY done" in _log(sandbox)), _log(sandbox)
     assert sandbox.wait_quiet()
 
@@ -61,14 +63,13 @@ def test_saved_text_is_respoken_through_the_engine(sandbox, fake_engine):
     assert r.returncode == 0, r.stderr
     _wait_played(sandbox)
 
-    assert sandbox.calls_to("shush") == [["quiet"]]
     bodies = [q["body"] for q in fake_engine.requests]
     assert len(bodies) >= 2
     assert " ".join(bodies) == LONG
-    plays = sandbox.calls_to("ffplay")
+    plays = sandbox.plays()
     assert len(plays) == len(bodies)
     for args in plays:
-        assert args[:4] == ["-f", "s16le", "-ar", "24000"]
+        assert args == STEREO
     assert (sandbox.lastreply / "sid1.pcm").read_bytes() == NON_SILENT_PCM * len(bodies)
     # shush raised the stop flag; the re-speak must not be counted as stopped by it
     assert "stopped=0" in _log(sandbox)
@@ -84,7 +85,9 @@ def test_text_beats_a_stale_recording_when_the_engine_is_up(sandbox, fake_engine
     _wait_played(sandbox)
 
     assert [q["body"] for q in fake_engine.requests] == [SHORT]
-    assert str(stale) not in [a[-1] for a in sandbox.calls_to("ffplay")]
+    assert len(sandbox.plays()) == 1
+    assert sandbox.writes() == [2 * len(NON_SILENT_PCM)]
+    assert sandbox.writes() != [2 * len(STALE)]
     assert stale.read_bytes() == NON_SILENT_PCM
     assert stale.read_bytes() != STALE
 
@@ -94,17 +97,17 @@ def test_recording_alone_plays_straight_from_disk(sandbox, request, engine_up):
     engine = request.getfixturevalue("fake_engine") if engine_up else None
     if not engine_up:
         assert sandbox.env["KOKORO_PORT"] == DEAD_PORT
-    pcm = _save_pcm(sandbox, "sid1")
+    _save_pcm(sandbox, "sid1")
 
     r = _replay(sandbox, "sid1")
     assert r.returncode == 0, r.stderr
-    assert sandbox.wait_for(lambda: sandbox.calls_to("ffplay-done"))
+    assert sandbox.wait_for(lambda: sandbox.calls_to("play-done"))
 
-    plays = sandbox.calls_to("ffplay")
+    plays = sandbox.plays()
     assert len(plays) == 1
-    assert plays[0][:4] == ["-f", "s16le", "-ar", "24000"]
-    assert plays[0][-1] == str(pcm)
-    assert sandbox.calls_to("shush") == [["quiet"]]
+    assert plays[0] == STEREO
+    assert sandbox.writes() == [2 * len(STALE)]
+    assert not sandbox.stopflag.exists()
     if engine is not None:
         assert engine.requests == []
 
@@ -112,17 +115,18 @@ def test_recording_alone_plays_straight_from_disk(sandbox, request, engine_up):
 def test_text_without_an_engine_falls_back_to_the_recording(sandbox):
     assert sandbox.env["KOKORO_PORT"] == DEAD_PORT
     _save_text(sandbox, "sid1", SHORT)
-    pcm = _save_pcm(sandbox, "sid1")
+    _save_pcm(sandbox, "sid1")
 
     r = _replay(sandbox, "sid1")
     assert r.returncode == 0, r.stderr
-    assert sandbox.wait_for(lambda: sandbox.calls_to("ffplay-done"))
+    assert sandbox.wait_for(lambda: sandbox.calls_to("play-done"))
 
-    assert [a[-1] for a in sandbox.calls_to("ffplay")] == [str(pcm)]
-    # play_reply.sh logs "PLAY start" the moment it runs; no log means the
+    assert len(sandbox.plays()) == 1
+    assert sandbox.writes() == [2 * len(STALE)]
+    # the worker logs "PLAY start" the moment it runs; no log means the
     # engine path was never taken
     assert not sandbox.log.exists()
-    assert not sandbox.playing()
+    assert sandbox.wait_quiet()
 
 
 def test_text_without_an_engine_or_recording_reports_nothing(sandbox):
@@ -132,7 +136,7 @@ def test_text_without_an_engine_or_recording_reports_nothing(sandbox):
     r = _replay(sandbox, "sid1")
     assert r.returncode == 1
     assert r.stdout.strip() == "nothing recorded yet"
-    assert sandbox.calls_to("ffplay") == []
+    assert sandbox.plays() == []
 
 
 def test_no_argument_picks_the_most_recently_saved_text(sandbox, fake_engine):
@@ -154,23 +158,23 @@ def test_nothing_saved_exits_1(sandbox, args):
     r = _replay(sandbox, *args)
     assert r.returncode == 1
     assert r.stdout.strip() == "nothing recorded yet"
-    assert sandbox.calls_to("ffplay") == []
-    assert sandbox.calls_to("shush") == []
+    assert sandbox.plays() == []
+    # shush is never called when there is nothing to play: the flag is untouched
+    assert not sandbox.stopflag.exists()
 
 
 def test_fallback_clears_the_stop_flag_before_playing(sandbox):
-    pcm = _save_pcm(sandbox, "sid1")
+    _save_pcm(sandbox, "sid1")
     sandbox.stopflag.touch()  # left behind by an earlier "shush"
-    env = dict(sandbox.env, FAKE_FFPLAY_SLEEP="1")
+    env = dict(sandbox.env, FAKE_PLAYER_SLEEP="1")
 
     r = _replay(sandbox, "sid1", env=env)
     assert r.returncode == 0, r.stderr
-    assert sandbox.wait_for(lambda: sandbox.calls_to("ffplay"))
+    assert sandbox.wait_for(lambda: sandbox.plays())
 
     # playback has started and is still running; the flag is already gone
-    assert sandbox.calls_to("ffplay-done") == []
+    assert sandbox.calls_to("play-done") == []
     assert not sandbox.stopflag.exists()
-    assert sandbox.calls_to("ffplay")[0][-1] == str(pcm)
-    # shush (which raises the flag) ran, and replay lowered it again afterwards
-    assert sandbox.calls_to("shush") == [["quiet"]]
-    assert sandbox.wait_for(lambda: sandbox.calls_to("ffplay-done"), timeout=5)
+    assert sandbox.plays()[0] == STEREO
+    assert sandbox.wait_for(lambda: sandbox.calls_to("play-done"), timeout=5)
+    assert sandbox.writes() == [2 * len(STALE)]

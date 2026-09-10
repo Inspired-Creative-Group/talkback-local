@@ -14,10 +14,11 @@ body:
       description: One "PLAY start"/"PLAY done" pair per reply is correct. Two is a bug.
       render: text
   - type: input
-    id: mac
+    id: machine
     attributes:
-      label: Mac and macOS version
-      placeholder: M1 Air, 16GB, macOS 15.2
+      label: Machine and OS version
+      description: Windows is untested so far — a report from there is doubly welcome.
+      placeholder: M1 Air, 16GB, macOS 15.2 — or Windows 11, PowerShell 5.1
     validations: { required: true }
   - type: checkboxes
     id: checked

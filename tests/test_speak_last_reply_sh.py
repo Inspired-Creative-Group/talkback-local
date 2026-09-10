@@ -1,7 +1,7 @@
 """hooks/speak_last_reply.sh — the Stop hook, end to end in the sandbox.
 
 Fed a hook payload on stdin, with the fake engine answering on its own port
-and the fake ffplay recording instead of playing. Pins what a user sees:
+and the fake sounddevice recording instead of playing. Pins what a user sees:
 an unarmed session stays silent; an armed one saves the text before the
 first sound, speaks once, and does not repeat itself within two minutes.
 """
@@ -64,7 +64,7 @@ def test_armed_session_saves_text_before_playback(sandbox, fake_engine, tmp_path
     r = _speak(sandbox, tp)
     assert r.returncode == 0, r.stderr
 
-    assert sandbox.wait_for(lambda: sandbox.calls_to("ffplay")), _log(sandbox)
+    assert sandbox.wait_for(lambda: sandbox.plays()), _log(sandbox)
     txt = sandbox.lastreply / f"{SID}.txt"
     assert txt.exists()
     saved = txt.read_text()
@@ -74,11 +74,10 @@ def test_armed_session_saves_text_before_playback(sandbox, fake_engine, tmp_path
 
     calls = sandbox.read_calls()
     names = [n for _, n, _ in calls]
-    first_ffplay = names.index("ffplay")
-    assert names[0] == "shush" and calls[0][2] == ["quiet"]
-    assert names.index("shush") < first_ffplay
-    assert txt.stat().st_mtime <= calls[first_ffplay][0]
-    assert sandbox.calls_to("kokoro-server") == []
+    first_play = names.index("play")
+    assert txt.stat().st_mtime <= calls[first_play][0]
+    assert (sandbox.lastreply / f".spoken-{SID}").is_file()
+    assert "engine not answering" not in _log(sandbox)
 
     assert f"speaking {len(saved)} chars via kokoro" in _log(sandbox)
     _played_to_the_end(sandbox)
@@ -94,7 +93,7 @@ def test_saved_pcm_is_the_engine_audio_in_order(sandbox, fake_engine, tmp_path):
     assert len(bodies) >= 2, "a four-sentence reply should be spoken in more than one chunk"
     assert " ".join(bodies) == (sandbox.lastreply / f"{SID}.txt").read_text()
     assert pcm.read_bytes() == NON_SILENT_PCM * len(bodies)
-    assert len(sandbox.calls_to("ffplay")) == len(bodies)
+    assert len(sandbox.plays()) == len(bodies)
     assert not (sandbox.lastreply / f"{SID}.pcm.part").exists()
     assert "PLAY done" in _log(sandbox)
 
@@ -105,7 +104,7 @@ def test_duplicate_reply_within_seconds_is_suppressed(sandbox, fake_engine, tmp_
     assert _speak(sandbox, tp).returncode == 0
     _played_to_the_end(sandbox)
     n_requests = len(fake_engine.requests)
-    n_ffplay = len(sandbox.calls_to("ffplay"))
+    n_plays = len(sandbox.plays())
 
     r = _speak(sandbox, tp)
     assert r.returncode == 0, r.stderr
@@ -114,7 +113,7 @@ def test_duplicate_reply_within_seconds_is_suppressed(sandbox, fake_engine, tmp_
     assert "duplicate reply suppressed" in log
     assert log.count("speaking ") == 1
     assert len(fake_engine.requests) == n_requests
-    assert len(sandbox.calls_to("ffplay")) == n_ffplay
+    assert len(sandbox.plays()) == n_plays
 
     text = (sandbox.lastreply / f"{SID}.txt").read_bytes()
     marker = (sandbox.lastreply / f".spoken-{SID}").read_text().strip()
@@ -128,12 +127,12 @@ def test_changed_reply_plays_again(sandbox, fake_engine, tmp_path):
     assert _speak(sandbox, tp).returncode == 0
     _played_to_the_end(sandbox)
     n_requests = len(fake_engine.requests)
-    n_ffplay = len(sandbox.calls_to("ffplay"))
+    n_plays = len(sandbox.plays())
 
     second = "A different reply this time."
     write_transcript(tp, [assistant_turn(ONE_LINER), user_turn("more"), assistant_turn(second)])
     assert _speak(sandbox, tp).returncode == 0
-    assert sandbox.wait_for(lambda: len(sandbox.calls_to("ffplay")) > n_ffplay), _log(sandbox)
+    assert sandbox.wait_for(lambda: len(sandbox.plays()) > n_plays), _log(sandbox)
     assert sandbox.wait_quiet()
 
     log = _log(sandbox)
@@ -194,23 +193,29 @@ def test_tool_only_transcript_plays_nothing(sandbox, fake_engine, tmp_path):
     r = _speak(sandbox, tp)
     assert r.returncode == 0, r.stderr
     assert sandbox.wait_quiet()
-    assert sandbox.calls_to("ffplay") == []
+    assert sandbox.plays() == []
     assert fake_engine.requests == []
     assert list(sandbox.lastreply.iterdir()) == []
     assert "speaking " not in _log(sandbox)
 
 
-def test_engine_down_asks_kokoro_server_to_start(sandbox, tmp_path):
+def test_engine_down_is_logged_and_a_start_is_attempted(sandbox, tmp_path):
     assert sandbox.env["KOKORO_PORT"] == DEAD_PORT
     tp = write_transcript(tmp_path / "t.jsonl", [assistant_turn(ONE_LINER)])
     sandbox.arm(SID)
+    t0 = time.monotonic()
     r = _speak(sandbox, tp)
     assert r.returncode == 0, r.stderr
-    assert sandbox.wait_for(lambda: sandbox.calls_to("kokoro-server")), _log(sandbox)
-    assert sandbox.calls_to("kokoro-server") == [["start"]]
+    # the start returns as soon as the child dies (the sandbox's torch raises
+    # at import), so the hook never sits out the 30 s start timeout
+    assert time.monotonic() - t0 < 5
+    assert f"engine not answering on {DEAD_PORT}; starting it" in _log(sandbox)
     assert (sandbox.lastreply / f"{SID}.txt").read_text() == ONE_LINER
+    server_log = sandbox.home / ".claude" / "automation" / "kokoro" / "server.log"
+    assert sandbox.wait_for(server_log.exists), _log(sandbox)
+    assert sandbox.wait_for(lambda: "sandbox: the real model is never loaded" in server_log.read_text())
 
     assert sandbox.wait_quiet(), _log(sandbox)
-    assert sandbox.calls_to("ffplay") == []
+    assert sandbox.plays() == []
     assert not (sandbox.lastreply / f"{SID}.pcm").exists()
     assert not (sandbox.lastreply / f"{SID}.pcm.part").exists()

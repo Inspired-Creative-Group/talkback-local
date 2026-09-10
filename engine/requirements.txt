@@ -1,3 +1,5 @@
+# The macOS engine: PyTorch kokoro — the same list as the `torch` extra in
+# pyproject.toml. The talkback package (and sounddevice) is installed on top.
 kokoro
 soundfile
 huggingface_hub

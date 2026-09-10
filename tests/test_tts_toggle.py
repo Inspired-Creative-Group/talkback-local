@@ -2,49 +2,20 @@
 exact phrases into voice commands and lets every other prompt through.
 
 Contract under test: a matching phrase exits 2 (Claude never sees it) and the
-side effect lands — the per-session flag, a ``shush quiet``, or a ``replay``
-of this session; anything else exits 0 with no flag, no calls and no output.
+side effect lands — the per-session flag, a shush, or a replay of this
+session; anything else exits 0 with no flag, no calls and no output.
 
-``bin/replay`` is replaced with a recording fake here: the real one spawns a
-player and is covered by its own tests.
+The hook is the shell shim over ``talkback toggle``; shush and replay run
+in-process now, so their effects are asserted directly: the stop flag, the
+engine's requests, the fake player's log.
 """
 
 import json
-import sys
 
 import pytest
 from conftest import hook_payload
 
 SID = "abcdef12-3456-7890-abcd-ef1234567890"
-
-_FAKE_REPLAY = """\
-import shlex, sys, time
-with open({log!r}, "a") as f:
-    f.write(f"{{time.time()}} replay {{shlex.join(sys.argv[1:])}}\\n")
-sys.exit({code})
-"""
-
-
-def _install_fake_replay(sandbox, code=0):
-    """Overwrite the sandbox's bin/replay with a fake that logs its args to the
-    calls log (same line format as the harness shims) and exits ``code``."""
-    impl = sandbox.home.parent / "fake_replay_impl.py"
-    impl.write_text(_FAKE_REPLAY.format(log=str(sandbox.calls), code=code))
-    target = sandbox.bin / "replay"
-    target.write_text(f'#!/bin/bash\nexec "{sys.executable}" "{impl}" "$@"\n')
-    target.chmod(0o755)
-
-
-@pytest.fixture
-def fake_replay(sandbox):
-    _install_fake_replay(sandbox, code=0)
-    return sandbox
-
-
-@pytest.fixture
-def failing_replay(sandbox):
-    _install_fake_replay(sandbox, code=1)
-    return sandbox
 
 
 def _toggle(sandbox, payload):
@@ -58,8 +29,8 @@ def _log_lines(sandbox):
 # --------------------------------------------------------------------------
 # tts on
 # --------------------------------------------------------------------------
-def test_tts_on_arms_the_session(fake_replay):
-    sb = fake_replay
+def test_tts_on_arms_the_session(sandbox):
+    sb = sandbox
     r = _toggle(sb, hook_payload(SID, prompt="tts on"))
     assert r.returncode == 2
     assert r.stderr.strip() == "voice on"
@@ -71,16 +42,16 @@ def test_tts_on_arms_the_session(fake_replay):
 
 
 @pytest.mark.parametrize("prompt", ["TTS ON", " tts on ", "tts on.", "TTS on!"])
-def test_tts_on_tolerates_case_whitespace_and_punctuation(fake_replay, prompt):
-    sb = fake_replay
+def test_tts_on_tolerates_case_whitespace_and_punctuation(sandbox, prompt):
+    sb = sandbox
     r = _toggle(sb, hook_payload(SID, prompt=prompt))
     assert r.returncode == 2
     assert r.stderr.strip() == "voice on"
     assert (sb.recording / SID).exists()
 
 
-def test_tts_on_is_idempotent(fake_replay):
-    sb = fake_replay
+def test_tts_on_is_idempotent(sandbox):
+    sb = sandbox
     sb.arm(SID)
     r = _toggle(sb, hook_payload(SID, prompt="tts on"))
     assert r.returncode == 2
@@ -90,20 +61,21 @@ def test_tts_on_is_idempotent(fake_replay):
 # --------------------------------------------------------------------------
 # tts off
 # --------------------------------------------------------------------------
-def test_tts_off_disarms_and_shushes(fake_replay):
-    sb = fake_replay
+def test_tts_off_disarms_and_shushes(sandbox):
+    sb = sandbox
     sb.arm(SID)
+    assert not sb.stopflag.exists()
     r = _toggle(sb, hook_payload(SID, prompt="tts off"))
     assert r.returncode == 2
     assert r.stderr.strip() == "voice off"
     assert not (sb.recording / SID).exists()
-    assert sb.calls_to("shush") == [["quiet"]]
-    assert sb.calls_to("replay") == []
+    assert sb.stopflag.exists(), "tts off shushes: the stop flag is raised"
+    assert sb.plays() == []
     assert any("TTS OFF" in line and SID[:8] in line for line in _log_lines(sb))
 
 
-def test_tts_off_only_disarms_its_own_session(fake_replay):
-    sb = fake_replay
+def test_tts_off_only_disarms_its_own_session(sandbox):
+    sb = sandbox
     sb.arm(SID)
     sb.arm("other-session")
     r = _toggle(sb, hook_payload(SID, prompt="TTS off."))
@@ -116,14 +88,15 @@ def test_tts_off_only_disarms_its_own_session(fake_replay):
 # shush / stop / quiet
 # --------------------------------------------------------------------------
 @pytest.mark.parametrize("prompt", ["shush", "stop", "quiet", "be quiet"])
-def test_stop_words_shush_but_keep_the_session_armed(fake_replay, prompt):
-    sb = fake_replay
+def test_stop_words_shush_but_keep_the_session_armed(sandbox, prompt):
+    sb = sandbox
     sb.arm(SID)
+    assert not sb.stopflag.exists()
     r = _toggle(sb, hook_payload(SID, prompt=prompt))
     assert r.returncode == 2
     assert r.stderr.strip() == "quiet"
-    assert sb.calls_to("shush") == [["quiet"]]
-    assert sb.calls_to("replay") == []
+    assert sb.stopflag.exists(), "shush raises the stop flag"
+    assert sb.plays() == []
     assert (sb.recording / SID).exists(), "shush stops playback, it does not turn the voice off"
     assert any("SHUSH" in line and SID[:8] in line for line in _log_lines(sb))
 
@@ -134,31 +107,41 @@ def test_stop_words_shush_but_keep_the_session_armed(fake_replay, prompt):
 @pytest.mark.parametrize(
     "prompt", ["again", "replay", "repeat", "say that again", "repeat that", "one more time"]
 )
-def test_replay_words_replay_this_session(fake_replay, prompt):
-    sb = fake_replay
+def test_replay_words_replay_this_session(sandbox, fake_engine, prompt):
+    sb = sandbox
+    saved = "The reply that was saved for this session."
+    (sb.lastreply / f"{SID}.txt").write_text(saved)
+    (sb.lastreply / "other-session.txt").write_text("Another session's reply.")
     r = _toggle(sb, hook_payload(SID, prompt=prompt))
     assert r.returncode == 2
     assert r.stderr.strip() == "replaying"
-    assert sb.calls_to("replay") == [[SID]], "replay must get the full session id"
-    assert sb.calls_to("shush") == [], "the hook leaves stopping the current reply to replay itself"
     assert any("REPLAY" in line and SID[:8] in line for line in _log_lines(sb))
 
+    assert sb.wait_for(lambda: sb.plays()), _log_lines(sb)
+    assert sb.wait_quiet()
+    assert [q["body"] for q in fake_engine.requests] == [saved], "replay must re-speak THIS session's text"
+    assert len(sb.plays()) == 1
+    assert (sb.lastreply / f"{SID}.pcm").exists()
 
-def test_replay_with_nothing_recorded_says_so(failing_replay):
-    sb = failing_replay
+
+def test_replay_with_nothing_recorded_says_so(sandbox):
+    sb = sandbox
+    assert list(sb.lastreply.iterdir()) == []
     r = _toggle(sb, hook_payload(SID, prompt="again"))
     assert r.returncode == 2
     assert r.stderr.strip() == "nothing recorded yet"
-    assert sb.calls_to("replay") == [[SID]]
+    assert r.stdout == ""
     assert not any("REPLAY" in line for line in _log_lines(sb))
+    assert sb.plays() == []
+    assert not sb.stopflag.exists(), "nothing to replay means nothing is shushed either"
 
 
 # --------------------------------------------------------------------------
 # everything else passes through
 # --------------------------------------------------------------------------
 @pytest.mark.parametrize("prompt", ["please turn tts on", "tts on now", "hello"])
-def test_ordinary_prompts_pass_through_untouched(fake_replay, prompt):
-    sb = fake_replay
+def test_ordinary_prompts_pass_through_untouched(sandbox, prompt):
+    sb = sandbox
     r = _toggle(sb, hook_payload(SID, prompt=prompt))
     assert r.returncode == 0
     assert r.stderr == ""
@@ -168,8 +151,8 @@ def test_ordinary_prompts_pass_through_untouched(fake_replay, prompt):
     assert not sb.log.exists()
 
 
-def test_payload_without_prompt_is_ignored(fake_replay):
-    sb = fake_replay
+def test_payload_without_prompt_is_ignored(sandbox):
+    sb = sandbox
     r = _toggle(sb, hook_payload(SID))
     assert r.returncode == 0
     assert r.stderr == ""
@@ -181,8 +164,8 @@ def test_payload_without_prompt_is_ignored(fake_replay):
 # --------------------------------------------------------------------------
 # session id fallback
 # --------------------------------------------------------------------------
-def test_missing_session_id_uses_unknown(fake_replay):
-    sb = fake_replay
+def test_missing_session_id_uses_unknown(sandbox):
+    sb = sandbox
     r = _toggle(sb, json.dumps({"prompt": "tts on"}))
     assert r.returncode == 2
     assert r.stderr.strip() == "voice on"
