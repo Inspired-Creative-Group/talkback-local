@@ -122,10 +122,10 @@ class Booted:
         self.thread = thread
         self.port = server.server_address[1]
 
-    def _request(self, method, body=None):
+    def _request(self, method, body=None, path="/"):
         conn = http.client.HTTPConnection("127.0.0.1", self.port, timeout=10)
         try:
-            conn.request(method, "/", body=body)
+            conn.request(method, path, body=body)
             resp = conn.getresponse()
             return resp.status, resp.getheader("Content-Type"), resp.read()
         finally:
@@ -134,8 +134,8 @@ class Booted:
     def get(self):
         return self._request("GET")
 
-    def post(self, text):
-        return self._request("POST", text.encode("utf-8"))
+    def post(self, text, path="/"):
+        return self._request("POST", text.encode("utf-8"), path=path)
 
     def close(self):
         self.server.shutdown()
@@ -231,6 +231,29 @@ def test_voice_is_the_tensor_loaded_from_icg_voice_pt_beside_the_server(boot, re
     assert weights_only is True
     eng.post("Hello there.")
     assert [voice is eng.fakes.sentinel for _, voice, _ in eng.fakes.calls] == [True, True]
+
+
+def test_voice_query_param_overrides_the_blend_for_that_request_only(boot):
+    eng = boot()
+    eng.post("In my own voice.", path="/?voice=am_michael")
+    eng.post("Back to the blend.")
+    spoken = [(text, voice) for text, voice, _ in eng.fakes.calls if text != "Ready."]
+    assert spoken[0] == ("In my own voice.", "am_michael")
+    assert spoken[1][1] is eng.fakes.sentinel  # no param -> the installed voice, unchanged
+    assert len(eng.fakes.loads) == 1           # the override never reloads the tensor
+
+
+@pytest.mark.parametrize(
+    "query",
+    ["", "?voice=", "?voice=../../etc/passwd", "?voice=a%20b", "?voice=a/b", "?voice=a%3Brm%20-rf%20x", "?other=am_michael"],
+    ids=["none", "blank", "traversal", "space", "slash", "shell", "wrong-key"],
+)
+def test_a_voice_that_is_not_a_plain_name_is_ignored_and_the_blend_is_used(boot, query):
+    eng = boot()
+    eng.post("Hello there.", path="/" + query)
+    text, voice, _ = eng.fakes.calls[-1]
+    assert text == "Hello there."
+    assert voice is eng.fakes.sentinel
 
 
 @pytest.mark.parametrize(
