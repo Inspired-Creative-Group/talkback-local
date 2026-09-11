@@ -6,6 +6,7 @@ sentence so playback starts on the first chunk instead of the last.
 import os
 import threading
 import warnings
+from urllib.parse import parse_qs, urlparse
 
 warnings.filterwarnings("ignore")
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -51,6 +52,10 @@ class H(BaseHTTPRequestHandler):
         self.send_response(200); self.end_headers(); self.wfile.write(b"ok")
 
     def do_POST(self):
+        # ?voice=<kokoro voice name> overrides the blend for ONE request. The
+        # default stays the installed voice, so nothing that omits it changes.
+        requested = parse_qs(urlparse(self.path).query).get("voice", [""])[0]
+        voice = requested if requested and requested.replace("_", "").isalnum() else None
         text = self.rfile.read(int(self.headers.get("Content-Length", 0))).decode("utf-8", "replace")
         try:
             logreq(text, self.client_address[0])
@@ -63,7 +68,7 @@ class H(BaseHTTPRequestHandler):
         self.end_headers()
         try:
             with LOCK:
-                for _, _, audio in PIPE(text, voice=VOICE, speed=SPEED):
+                for _, _, audio in PIPE(text, voice=(voice or VOICE), speed=SPEED):
                     a = audio.detach().cpu().numpy() if hasattr(audio, "detach") else np.asarray(audio)
                     pcm = (np.clip(a, -1, 1) * 32767).astype("<i2").tobytes()
                     self.wfile.write(pcm)
