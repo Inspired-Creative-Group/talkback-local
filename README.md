@@ -371,6 +371,39 @@ request.
 If it behaves differently on your hardware, that is worth an issue — those gaps
 are the ones that need other people's machines to close.
 
+## Optional: an OpenAI-compatible endpoint
+
+Off by default. Nothing in `install.sh` starts it.
+
+Some clients (chat gateways, agent frameworks) only speak OpenAI's speech API.
+`engine/openai_adapter.py` is a small standard-library process that sits in
+front of the warm engine and translates:
+
+```bash
+umask 077; python3 -c 'import secrets;print(secrets.token_urlsafe(32))' > ~/.config/kokoro-openai.key
+KOKORO_OPENAI_KEY_FILE=~/.config/kokoro-openai.key python3 engine/openai_adapter.py
+# kokoro-openai ready on 127.0.0.1:8921 -> http://127.0.0.1:8910/
+
+curl -H "Authorization: Bearer $(cat ~/.config/kokoro-openai.key)" \
+     -H 'Content-Type: application/json' \
+     -d '{"model":"kokoro","input":"Hello.","voice":"default","response_format":"opus"}' \
+     http://127.0.0.1:8921/v1/audio/speech -o hello.ogg
+```
+
+- `POST /v1/audio/speech` returns `wav` or `pcm` (no extra tools) or `mp3`,
+  `opus`, `flac` (needs `ffmpeg`). Default `mp3`, as in OpenAI's API.
+- `voice`: a Kokoro voice name such as `af_heart` is passed through; anything
+  else (`alloy`, `default`) uses the engine's installed voice. `speed` and
+  `model` are accepted and ignored.
+- It refuses to start without a key file, and answers 401 to any `/v1` request
+  without `Authorization: Bearer <key>`. `GET /health` is open and says only `ok`.
+- It binds `127.0.0.1`. To reach it from a Docker container on the same Mac, use
+  Docker Desktop's `host.docker.internal`, which reaches the host's loopback,
+  rather than binding `0.0.0.0` and publishing your speaker to the LAN.
+- Settings: `KOKORO_OPENAI_HOST`, `KOKORO_OPENAI_PORT` (8921),
+  `KOKORO_URL`, `KOKORO_OPENAI_MAX_CHARS` (4096), `FFMPEG`. Run it under your
+  own launch agent if you want it to survive a reboot.
+
 ## Tests
 
 There is a test suite, and CI runs it on every pull request (macOS, Python
